@@ -1,0 +1,875 @@
+CREATE OR REPLACE FORCE VIEW LC_SCMI.VW_FCSCMI_GFIU_NEW
+(
+    CASE_ID,
+    SOURCE,
+    INVESTIGATING_REGION_TEAM,
+    CASE_BU,
+    CASE_DIVISION,
+    CASE_ID2,
+    CASE_REGIONS,
+    CASE_COUNTRIES,
+    LINE_OF_BUSINESS,
+    LEGAL_ENTITIES,
+    BUSINESS_AREA,
+    CASE_NAME,
+    CASE_STATE,
+    CASE_STEP,
+    DATE_CASE_CREATED,
+    DATE_CASE_COMPLETED,
+    DATE_CASE_CLOSED,
+    DATE_REPORTED,
+    REFERRAL,
+    REFERRAL_CONTACT,
+    REFERRAL_CONTACT_NUM,
+    CASE_TRIGGER,
+    SUMMARY_TRIGGER,
+    CASE_TAGS,
+    XML_GENERATION_DATE,
+    ELEMENT_TYPE,
+    FCSCMI_ELEMENT_ID,
+    ELEMENT_ID,
+    SAR_FILED,
+    SAR_FILING_DATE,
+    ELEMENT_DECISION,
+    PARTNER_TYPE,
+    PARTY_ROLE,
+    PARTNER_NAME,
+    PARTNER_INDUSTRIES,
+    PARTNER_DOMICILE_COUNTRIES,
+    PARTNER_NATIONALITY_COUNTRIES,
+    ACCOUNT_NAME,
+    ACCOUNT_STATUS,
+    BR_NAME,
+    BR_STATUS_POINT_IN_TIME,
+    CURRENT_BR_STATUS,
+    BR_BALANCE_POINT_IN_TIME,
+    CURRENT_BR_BALANCE,
+    BR_CURRENCY,
+    RELATIONSHIP_STRATEGY,
+    CASE_CREATED_BY,
+    CASE_OWNER,
+    CASE_OWNER_GPN,
+    PREDICATE_OFFENSE,
+    COMPLIANCE_UNIT,
+    CASE_RATING,
+    ML_PHASE,
+    PEP,
+    SCAP,
+    SIAP,
+    NTBR,
+    SIM,
+    FIFTY_PLUS,
+    FISCAL_RISK,
+    SUMMARY_ANALYSIS,
+    SUMMARY_CONCLUSION,
+    CASE_DESCRIPTION,
+    CONFIDENTIAL,
+    DATE_LAST_UPDATE,
+    OUTCOME_SUBTYPE
+)
+AS
+WITH
+/* =======================================================================
+   CTE 1: RELEVANT_CASES
+   ======================================================================= */
+RELEVANT_CASES AS (
+    SELECT
+        ALERT_ID,
+        ALERT_INTERNAL_ID,
+        BUNIT_IDENTIFIER,
+        C118,
+        CLOSED_DATE,
+        CREATE_DATE,
+        CSM13,
+        CSM24,
+        LAST_READ_DATE,
+        LAST_UPDATE_DATE,
+        OWNER_IDENTIFIER,
+        OWNER_INTERNAL_ID,
+        P13,
+        P17,
+        P21,
+        P45,
+        P48,
+        P49,
+        SCORE,
+        STATUS_INTERNAL_ID
+    FROM LC_RCM_INC.ALERTS A
+        LEFT JOIN LC_RCM_INC.ACM_ALERT_CUSTOM_ATTRIBUTES ACA
+               ON A.ALERT_CUSTOM_ATTRIBUTES_ID = ACA.ALERT_CUSTOM_ATTRIBUTES_ID
+    WHERE A.ALERT_TYPE_ID = 3
+      AND A.DELETED      = 0
+      AND A.P18          = 'Investigation'
+),
+
+/* =======================================================================
+   CTE 2: CASES_LOGS
+   ======================================================================= */
+CASES_LOGS AS (
+    SELECT
+        RC.ALERT_ID,
+        AUD.CREATE_DATE,
+        AUD.USER_INTERNAL_ID,
+        AUD.EVENT,
+        AUD.NOTE
+    FROM LC_RCM_INC.ACM_AUDITS AUD
+        INNER JOIN LC_RCM_INC.ACM_ALERT_AUDITS AA
+                ON AUD.AUDIT_INTERNAL_ID = AA.AUDIT_INTERNAL_ID
+        INNER JOIN RELEVANT_CASES RC
+                ON AA.ALERT_INTERNAL_ID = RC.ALERT_INTERNAL_ID
+    WHERE AUD.EVENT IN ('Status changed', 'Alert created')
+),
+
+/* =======================================================================
+   CTE 3: EMPLOYEE_DATA
+   ======================================================================= */
+EMPLOYEE_DATA AS (
+    SELECT
+        E.EMPLID,
+        E.FIRST_NAME,
+        E.LAST_NAME,
+        E.UBS_DEPT_DESCR
+    FROM LC_MONITOR.EMPLOYEES_DIM E
+),
+
+/* =======================================================================
+   CTE 4: REL_INVOLVED_ELEMENTS_PARTIES
+   ======================================================================= */
+REL_INVOLVED_ELEMENTS_PARTIES AS (
+    SELECT
+        ALERT_ID,
+        ALERT_TYPE_ID,
+        ALERT_TYPE_INTERNAL_ID,
+        CS18,
+        CSM12,
+        CSM24,
+        CSM27,
+        P11,
+        P15,
+        P16,
+        P17,
+        P18,
+        P19,
+        P20,
+        P21,
+        P28,
+        P30,
+        P31,
+        P32,
+        P33,
+        P34,
+        P43
+    FROM LC_RCM_INC.ALERTS A
+        LEFT JOIN LC_RCM_INC.ACM_ALERT_CUSTOM_ATTRIBUTES ACA
+               ON A.ALERT_CUSTOM_ATTRIBUTES_ID = ACA.ALERT_CUSTOM_ATTRIBUTES_ID
+    WHERE A.ALERT_TYPE_ID IN (4, 5, 1005, 1004, 1002, 1012, 18, 1014, 1016, 1017)
+      AND A.DELETED      = 0
+),
+
+/* =======================================================================
+   CTE 5: RISK_FLAGS
+   (PEP / SCAP / SIAP / NTBR / SIM / FIFTY_PLUS)
+   ======================================================================= */
+RISK_FLAGS AS (
+    SELECT
+        IEP.ALERT_ID,
+        DOMESTIC_PEP,
+        FIFTY_PLUS,
+        FISCAL_RISK,
+        GLOBAL_PEP,
+        LOCAL_PEP,
+        NTBR,
+        PEP,
+        SCAP,
+        SIAP,
+        SIM
+    FROM (
+        SELECT
+            IEP.ALERT_ID,
+            CASE
+                WHEN RISK.ATTRIBUTE_VALUE = '5920' THEN '5577'
+                WHEN RISK.ATTRIBUTE_VALUE = '5921' THEN '5578'
+                WHEN RISK.ATTRIBUTE_VALUE = '5926' THEN '5579'
+                WHEN RISK.ATTRIBUTE_VALUE = '5922' THEN '5580'
+                WHEN RISK.ATTRIBUTE_VALUE = '5931' THEN '5581'
+                ELSE NULL
+            END AS ATTRIBUTE_VALUE
+        FROM RELEVANT_CASES RC
+            INNER JOIN LC_SCMT.CASE_ELEMENTS CE
+                    ON CE.CASE_ID = RC.ALERT_ID
+            INNER JOIN REL_INVOLVED_ELEMENTS_PARTIES IEP
+                    ON IEP.ALERT_ID = RC.ALERT_ID
+            INNER JOIN LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES RISK
+                    ON RISK.WORK_ITEM_ID = IEP.ALERT_ID
+        WHERE RISK.ATTRIBUTE_TYPE        = 5575
+          AND RISK.ATTRIBUTE_CUSTOM_VALUE = 'Yes'
+    )
+    PIVOT (
+        COUNT(ATTRIBUTE_VALUE)
+        FOR ATTRIBUTE_VALUE IN (
+            '5580' AS SIAP,
+            '5581' AS FIFTY_PLUS,
+            '5577' AS DOMESTIC_PEP,
+            '5578' AS GLOBAL_PEP,
+            '5579' AS LOCAL_PEP
+        )
+    )
+),
+
+/* =======================================================================
+   CTE 6: RELEVANT_OUTCOMES
+   ======================================================================= */
+RELEVANT_OUTCOMES AS (
+    SELECT
+        ALERT_ID,
+        P31,
+        P32,
+        CD11
+    FROM LC_RCM_INC.ALERTS A
+        LEFT JOIN LC_RCM_INC.ACM_ALERT_CUSTOM_ATTRIBUTES ACA
+               ON A.ALERT_CUSTOM_ATTRIBUTES_ID = ACA.ALERT_CUSTOM_ATTRIBUTES_ID
+    WHERE A.ALERT_TYPE_ID = 1007
+      AND A.DELETED      = 0
+),
+
+/* =======================================================================
+   CTE 7: CREATED_BY
+   ======================================================================= */
+CREATED_BY AS (
+    SELECT DISTINCT
+        CL.ALERT_ID,
+        USR.FULL_NAME AS CREATED_BY
+    FROM CASES_LOGS CL
+        LEFT JOIN LC_RCM_INC.ACM_USERS USR
+               ON CL.USER_INTERNAL_ID = USR.USER_INTERNAL_ID
+    WHERE CL.EVENT = 'Alert created'
+),
+
+/* =======================================================================
+   CTE 8: REOPENED_AS
+   ======================================================================= */
+REOPENED_AS AS (
+    SELECT
+        MAX(CL.CREATE_DATE) AS TRANS_DATE,
+        CL.ALERT_ID
+    FROM CASES_LOGS CL
+    WHERE CL.NOTE  LIKE '%to [Re-opened]%'
+      AND CL.EVENT = 'Status changed'
+    GROUP BY CL.ALERT_ID
+),
+
+/* =======================================================================
+   CTE 9: COMPLETED_AS
+   ======================================================================= */
+COMPLETED_AS AS (
+    SELECT
+        MAX(CL.CREATE_DATE) AS TRANS_DATE,
+        CL.ALERT_ID
+    FROM CASES_LOGS CL
+    WHERE CL.NOTE  LIKE '%to [Complete- Action Tracking]%'
+      AND CL.EVENT = 'Status changed'
+    GROUP BY CL.ALERT_ID
+),
+
+/* =======================================================================
+   CTE 10: BUSINESS_COVERAGE
+   ======================================================================= */
+BUSINESS_COVERAGE AS (
+    SELECT
+        ROW_NUMBER() OVER (PARTITION BY ALERT_ID ORDER BY ALERT_ID DESC) AS RID,
+        ALERT_ID,
+        CASE_BUS_COVERAGE,
+        REGION_CODE,
+        BUSINESS_AREA,
+        LINE_OF_BUSINESS_VAL,
+        COUNTRY,
+        UBS_ENTITY
+    FROM (
+        SELECT DISTINCT
+            RC.ALERT_ID,
+            CASE OE.BUSINESS_DIV_CODE
+                WHEN 'IB'   THEN 'IB - Investment Bank'
+                WHEN 'WM'   THEN 'WM - Wealth Management'
+                WHEN 'WMA'  THEN 'WMA - Wealth Management Americas'
+                WHEN 'AM'   THEN 'AM - Asset Management'
+                WHEN 'P&C'  THEN 'P&C - Personal and Corporate'
+            END AS CASE_BUS_COVERAGE,
+            OE.REGION_CODE,
+            OE.BUSINESS_AREA,
+            OE.LINE_OF_BUSINESS_VAL,
+            OE.UBS_ENTITY,
+            OE.COUNTRY_CODE    AS COUNTRY,
+            OE.UBS_ENTITY_CODE AS UBS_ENTITY
+        FROM LC_SCMT.SCMT_COMBINED_ENTITIES OE
+            INNER JOIN RELEVANT_CASES RC
+                    ON OE.ALERT_ID = RC.ALERT_ID
+    )
+),
+
+/* =======================================================================
+   CTE 11: WORK_ITEM_DATA
+   ======================================================================= */
+WORK_ITEM_DATA AS (
+    SELECT DISTINCT
+        WA.WORK_ITEM_ID          AS PART_WORK_ID,
+        IEP.ALERT_ID             AS ALERT_ID,
+        IEP.ALERT_TYPE_ID,
+        IEP.ALERT_TYPE_INTERNAL_ID,
+
+        /* Work item type / party type text */
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (4, 5, 1005, 1004, 1002, 1012, 18)
+                THEN 'Partner (AM/WMA/GWM/IB)'
+            WHEN IEP.ALERT_TYPE_ID = 1014
+                THEN 'BR ID (client account)'
+            WHEN IEP.ALERT_TYPE_ID IN (1005, 1004, 1002, 1012)
+                THEN IEP.P11
+        END AS WORK_ITEM_TYPE,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (4, 5, 1005, 1004, 1002, 1012, 18) THEN IEP.P20
+            WHEN IEP.ALERT_TYPE_ID = 1014 THEN IEP.C118
+        END AS ITEM_ID,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1005, 1004, 1002, 1012, 18) THEN IEP.P30
+        END AS INDUSTRY,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1005, 1004, 1002, 1012, 18) THEN IEP.CSM24
+        END AS COUNTRY_CODE,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1005, 1004, 1002, 1012, 18) THEN IEP.P31
+        END AS DOMICILE,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (4, 5, 1012, 1004, 1002) THEN IEP.P32
+        END AS NATIONALITY,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1005, 1012, 1004, 1002, 5) THEN IEP.P31
+            WHEN IEP.ALERT_TYPE_ID = 18 THEN IEP.P30
+        END AS PARTNER_NAME,
+
+        /* Account + BR fields */
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1013, 1001, 19) THEN IEP.CSM24
+            ELSE ''
+        END AS ACCOUNT_NAME,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1013, 1001, 19) THEN IEP.P17
+            ELSE ''
+        END AS ACCOUNT_STATUS,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID = 1011 THEN IEP.CSM2
+            ELSE ''
+        END AS BR_NAME,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1011, 1016) THEN IEP.P17
+            ELSE ''
+        END AS BR_STATUS_POINT_IN_TIME,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1011, 1016) THEN IEP.P21
+            ELSE ''
+        END AS CURRENT_BR_STATUS,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1011, 1016) THEN IEP.P15
+            ELSE ''
+        END AS BR_BALANCE_POINT_IN_TIME,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (1011, 1016) THEN IEP.P20
+            ELSE ''
+        END AS CURRENT_BR_BALANCE,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID = 1011 THEN IEP.P16
+            ELSE ''
+        END AS BR_CURRENCY,
+
+        /* PEP/SCAP/SIAP/NTBR/SIM/FIFTY_PLUS/FISCAL flags at element level */
+        CASE
+            WHEN (RF.GLOBAL_PEP = 1 OR RF.DOMESTIC_PEP = 1 OR RF.LOCAL_PEP = 1)
+                 AND IEP.ALERT_TYPE_ID IN (4, 5, 1005, 1004, 1002, 1012, 1014, 1016)
+            THEN 'Y'
+            ELSE 'N'
+        END AS IS_PEP,
+
+        CASE
+            WHEN RF.SCAP = 1
+                 AND IEP.ALERT_TYPE_ID IN (1005, 1004, 1002, 1012, 18, 1004, 1002, 1016)
+            THEN 'Y'
+            ELSE 'N'
+        END AS IS_SCAP,
+
+        CASE
+            WHEN RF.SIAP = 1
+                 AND IEP.ALERT_TYPE_ID IN (1005, 1012, 18, 1004, 1002, 1016)
+            THEN 'Y'
+            WHEN (RF.SIAP = 0 OR RF.SIAP IS NULL)
+                 AND IEP.ALERT_TYPE_ID IN (1005, 1012, 18, 1004, 1002, 1016)
+            THEN 'N'
+            ELSE ''
+        END AS SIAP,
+
+        CASE
+            WHEN RF.NTBR = 1
+                 AND IEP.ALERT_TYPE_ID IN (1005, 1012, 18, 1004, 1002, 1016)
+            THEN 'Y'
+            WHEN (RF.NTBR = 0 OR RF.NTBR IS NULL)
+                 AND IEP.ALERT_TYPE_ID IN (1005, 1012, 18, 1004, 1002, 1016)
+            THEN 'N'
+            ELSE ''
+        END AS NTBR,
+
+        CASE
+            WHEN RF.SIM = 1
+                 AND IEP.ALERT_TYPE_ID IN (1005, 1012, 18, 1004, 1002, 1016)
+            THEN 'Y'
+            WHEN (RF.SIM = 0 OR RF.SIM IS NULL)
+                 AND IEP.ALERT_TYPE_ID IN (1005, 1012, 18, 1004, 1002, 1016)
+            THEN 'N'
+            ELSE ''
+        END AS SIM,
+
+        CASE
+            WHEN RF.FIFTY_PLUS = 1
+                 AND IEP.ALERT_TYPE_ID IN (1005, 1012, 18, 1004, 1002, 1016)
+            THEN 'Y'
+            WHEN (RF.FIFTY_PLUS = 0 OR RF.FIFTY_PLUS IS NULL)
+                 AND IEP.ALERT_TYPE_ID IN (1005, 1012, 18, 1004, 1002, 1016)
+            THEN 'N'
+            ELSE ''
+        END AS FIFTY_PLUS,
+
+        CASE
+            WHEN RF.FISCAL_RISK = 1 THEN 'Y'
+            WHEN (RF.FISCAL_RISK = 0 OR RF.FISCAL_RISK IS NULL)
+                 AND IEP.ALERT_TYPE_ID = 1012
+            THEN 'N'
+            ELSE ''
+        END AS FISCAL_RISK,
+
+        CASE
+            WHEN IEP.ALERT_TYPE_ID IN (4, 1005, 1012, 18, 1004, 1002, 1014, 5)
+            THEN IEP.P18
+            ELSE ''
+        END AS PARTY_ROLE
+
+    FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES WA
+        INNER JOIN REL_INVOLVED_ELEMENTS_PARTIES IEP
+                ON WA.ELEMENT_ID = IEP.ALERT_ID
+        INNER JOIN RELEVANT_CASES RC
+                ON RC.ALERT_INTERNAL_ID = IEP.ALERT_TYPE_INTERNAL_ID
+        LEFT JOIN RISK_FLAGS RF
+               ON RF.ALERT_ID = IEP.ALERT_ID
+),
+
+/* =======================================================================
+   CTE 12: SELECTED_VALUE_OUTCOME_SVO
+   (join outcomes with work item data)
+   ======================================================================= */
+SELECTED_VALUE_OUTCOME_SVO AS (
+    SELECT
+        RO.ALERT_ID,
+        SVO.PART_WORK_ID,
+        SVO.ITEM_ID                 AS ELEMENT_ID,
+        SVO.INDUSTRY,
+        SVO.DOMICILE,
+        SVO.NATIONALITY,
+        SVO.PARTY_TYPE,
+        SVO.PARTNER_NAME,
+        SVO.ACCOUNT_NAME,
+        SVO.ACCOUNT_STATUS,
+        SVO.BR_NAME,
+        SVO.BR_STATUS_POINT_IN_TIME,
+        SVO.CURRENT_BR_STATUS,
+        SVO.BR_BALANCE_POINT_IN_TIME,
+        SVO.CURRENT_BR_BALANCE,
+        SVO.BR_CURRENCY,
+        RO.CD11                      AS COMPLETION_DATE,
+        SVO.PEP,
+        SVO.SCAP,
+        SVO.SIAP,
+        SVO.NTBR,
+        SVO.SIM,
+        SVO.FIFTY_PLUS,
+        SVO.FISCAL_RISK,
+        SVO.PARTY_ROLE
+    FROM RELEVANT_OUTCOMES RO
+        INNER JOIN LC_SCMT.CASE_ELEMENTS C
+                ON RO.ALERT_ID = C.WORK_ITEM_ID
+        INNER JOIN RELEVANT_CASES RC
+                ON C.CASE_ID = RC.ALERT_ID
+        LEFT JOIN WORK_ITEM_DATA SVO
+               ON RO.ALERT_ID = SVO.ALERT_ID
+),
+
+/* =======================================================================
+   CTE 13: SAR_OUTCOME_SUB_TYPES
+   ======================================================================= */
+SAR_OUTCOME_SUB_TYPES AS (
+    SELECT
+        ML.REL_LIST_ITEM_VALUE AS SAR_OUTCOME_SUBTYPE
+    FROM LC_SCMT.MD_LIST_ITEM_RELATIONS IR
+        LEFT JOIN LC_SCMT.MD_LIST_ITEMS ML
+               ON IR.REL_LIST_ITEM_ID_CHILD = ML.MD_LIST_ITEM_ID
+    WHERE IR.REL_LIST_ITEM_ID_PARENT IN (
+        SELECT MD_LIST_ITEM_ID
+        FROM LC_SCMT.MD_LIST_ITEMS
+        WHERE MD_LIST_ITEM_VALUE = 'Report to Authorities'
+    )
+),
+
+/* =======================================================================
+   CTE 14: MAX_RO_OEX
+   (latest Report to Authorities outcome)
+   ======================================================================= */
+MAX_RO_OEX AS (
+    SELECT
+        C.ALERT_ID,
+        C.OUTCOME_TYPE,
+        C.OUTCOME_SUBTYPE,
+        C.COMPLETION_DATE,
+        ROW_NUMBER() OVER (
+            PARTITION BY C.ALERT_ID
+            ORDER BY C.OUTCOME_WI_ID DESC
+        ) AS ROW_NUM
+    FROM OUTCOME_ELEMENTS C
+    WHERE C.OUTCOME_TYPE = 'Report to Authorities'
+      AND C.OUTCOME_SUBTYPE IN (
+            SELECT SAR_OUTCOME_SUBTYPE
+            FROM SAR_OUTCOME_SUB_TYPES
+      )
+),
+
+/* =======================================================================
+   CTE 15: STRATEGY_FROM_SUB_TYPES
+   (relationship strategy from outcome)
+   ======================================================================= */
+STRATEGY_FROM_SUB_TYPES AS (
+    SELECT
+        CASE_ID,
+        RELATIONSHIP_STRATEGY
+    FROM (
+        SELECT
+            CASE_ID,
+            RELATIONSHIP_STRATEGY,
+            ROW_NUMBER() OVER (
+                PARTITION BY CASE_ID
+                ORDER BY RELATIONSHIP_STRATEGY_RANK DESC
+            ) AS RN_STRATEGY
+        FROM (
+            SELECT
+                O.OUTCOME_ID,
+                O.CASE_ID,
+                O.OUTCOME_TYPE,
+                CASE
+                    WHEN O.OUTCOME_TYPE IN ('Client Relationship Exit', 'Exit')
+                        THEN 'Exit'
+                    WHEN O.OUTCOME_TYPE IN ('Continuation', 'Continuation/Retain Client Relationship')
+                        THEN 'Continuation'
+                    WHEN O.OUTCOME_TYPE IN ('Closed Already', 'Closed Business Relationship')
+                        THEN 'Closed Already'
+                    ELSE O.OUTCOME_TYPE
+                END AS RELATIONSHIP_STRATEGY,
+                CASE
+                    WHEN O.OUTCOME_TYPE IN ('Client Relationship Exit', 'Exit') THEN 4
+                    WHEN O.OUTCOME_TYPE = 'Continuation/Retain Client Relationship' THEN 3
+                    WHEN O.OUTCOME_TYPE = 'Contribution' THEN 2
+                    WHEN O.OUTCOME_TYPE IN ('Closed Already', 'Closed Business Relationship') THEN 1
+                    ELSE 0
+                END AS RELATIONSHIP_STRATEGY_RANK
+            FROM OUTCOME_ELEMENTS O
+        )
+    )
+    WHERE RN_STRATEGY = 1
+),
+
+/* =======================================================================
+   CTE 16: CASE_LATEST_FILED_OUTCOME
+   ======================================================================= */
+CASE_LATEST_FILED_OUTCOME AS (
+    SELECT
+        CASEID,
+        CASEINTERNALID
+    FROM (
+        SELECT
+            CE.CASE_ID           AS CASEID,
+            RC.ALERT_INTERNAL_ID AS CASEINTERNALID,
+            ROW_NUMBER() OVER (
+                PARTITION BY CE.CASE_ID
+                ORDER BY A.CREATE_DATE DESC
+            ) AS OUTCOMEROWNUMBER
+        FROM LC_SCMT.CASE_ELEMENTS CE
+            INNER JOIN LC_RCM_INC.ALERTS A
+                    ON CE.WORK_ITEM_ID = A.ALERT_ID
+            INNER JOIN RELEVANT_CASES RC
+                    ON CE.CASE_ID = RC.ALERT_ID
+        WHERE A.ALERT_TYPE_ID = 1007
+          AND A.DELETED      = 0
+          AND A.P52          = 'Report to Authorities'
+    )
+    WHERE OUTCOMEROWNUMBER = 1
+),
+
+/* =======================================================================
+   CTE 17: MCL_ATTACHMENTS_OUTCOME_LOG
+   ======================================================================= */
+MCL_ATTACHMENTS_OUTCOME_LOG AS (
+    SELECT
+        LAY.CASEID,
+        MAX(AUD.CREATE_DATE) AS LATESTATTDATETIME
+    FROM CASE_LATEST_FILED_OUTCOME LAY
+        INNER JOIN LC_SCMT.MD_REL_LIST_ITEMS REL
+                ON REL.REL_LIST_ITEM_ID = LAY.CASEINTERNALID
+        LEFT JOIN LC_RCM_INC.ATTACHMENTS ALT
+               ON ALT.ALERT_INTERNAL_ID = LAY.CASEINTERNALID
+        LEFT JOIN LC_RCM_INC.ATTACHMENT_RELS ATR
+               ON ATR.ATTACHMENT_ID = ALT.ATTACHMENT_INTERNAL_ID
+        LEFT JOIN LC_RCM_INC.ACM_AUDITS AUD
+               ON AUD.AUDIT_INTERNAL_ID = ATR.AUDIT_INTERNAL_ID
+    WHERE ALT.FILE_SIZE IS NOT NULL
+       OR ATR.ATTACHMENT_INTERNAL_ID = AUD.AUDIT_INTERNAL_ID
+    GROUP BY LAY.CASEID
+),
+
+/* =======================================================================
+   CTE 18: GCU_SAR_OUTCOME_ST
+   (built on LC_SCMT.VW_FCSMT_GLOBAL_AMER_NO_ERROR; SAR logic)
+   ======================================================================= */
+GCU_SAR_OUTCOME_ST AS (
+    SELECT
+        CASE_ID,
+        SOURCE,
+        INVESTIGATING_REGION_TEAM,
+        CASE_BU,
+        CASE_DIVISION,
+        CASE_REGIONS,
+        CASE_COUNTRIES,
+        LINE_OF_BUSINESS,
+        LEGAL_ENTITIES,
+        BUSINESS_AREA,
+        CASE_NAME,
+        CASE_STATE,
+        CASE_STEP,
+        DATE_CASE_CREATED,
+        DATE_CASE_COMPLETED,
+        DATE_CASE_CLOSED,
+        DATE_REOPENED,
+        REFERRAL,
+        REFERRAL2,
+        REFERRAL_CONTACT,
+        REFERRAL_CONTACT_OU_NM,
+        CASE_TRIGGER,
+        CASE_TAGS,
+        XML_GENERATION_DATE,
+        SUMMARY_TRIGGER,
+        OUTCOME_ID,
+        OUTCOME_TYPE,
+        OUTCOME_SUB_TYPE,
+        COMPLETION_DATE,
+        ELEMENT_TYPE,
+        FSCMT_ELEMENT_ID,
+        ELEMENT_ID,
+        PARTNER_TYPE,
+        PARTNER_NAME,
+        PARTNER_INDUSTRIES,
+        PARTNER_DOMICILE_COUNTRIES,
+        PARTNER_NATIONALITY_COUNTRIES,
+        ACCOUNT_NAME,
+        ACCOUNT_STATUS,
+        BR_NAME,
+        BR_STATUS_POINT_IN_TIME,
+        CURRENT_BR_STATUS,
+        BR_BALANCE_POINT_IN_TIME,
+        CURRENT_BR_BALANCE,
+        BR_CURRENCY,
+        RELATIONSHIP_STRATEGY,
+        CASE_CREATED_BY,
+        CASE_OWNER,
+        CASE_OWNER_GPN,
+        COMPLIANCE_UNIT,
+        PREDICATE_OFFENSE,
+        RISK_RATING,
+        ML_PHASE,
+        PEP,
+        SCAP,
+        SIAP,
+        NTBR,
+        SIM,
+        FIFTY_PLUS,
+        FISCAL_RISK,
+        SUMMARY_ANALYSIS,
+        SUMMARY_CONCLUSION,
+        CASE_DESCRIPTION,
+        CONFIDENTIAL,
+        DATE_LAST_UPDATE,
+        RAISED_IN_ERROR,
+        MAX_SAR_OUTCOME_ST,
+        MAX_SAR_COMPLETION_DT
+    FROM LC_SCMT.VW_FCSMT_GLOBAL_AMER_NO_ERROR
+)
+/* =======================================================================
+   FINAL SELECT FROM GCU_SAR_OUTCOME_ST
+   (plus anonymisation by BU and SAR logic)
+   ======================================================================= */
+SELECT
+    CASE_ID,
+    SOURCE,
+    INVESTIGATING_REGION_TEAM,
+    CASE_BU,
+    CASE_DIVISION,
+    CASE_REGIONS,
+    CASE_COUNTRIES,
+    LINE_OF_BUSINESS,
+    LEGAL_ENTITIES,
+    BUSINESS_AREA,
+
+    CASE
+        WHEN CASE_BU LIKE 'he%' THEN SUBSTR(CASE_NAME, 1, INSTR(CASE_NAME, ' (') - 1)
+        WHEN CASE_BU IN (SELECT BU_IDENTIFIER FROM BU_TO_EXCLUDE) THEN 'Anonymised'
+        ELSE CASE_NAME
+    END AS CASE_NAME,
+
+    CASE_STATE,
+    CASE_STEP,
+    DATE_CASE_CREATED,
+    DATE_CASE_COMPLETED,
+    DATE_CASE_CLOSED,
+    DATE_REOPENED,
+    REFERRAL,
+    REFERRAL2,
+    REFERRAL_CONTACT,
+    REFERRAL_CONTACT_OU_NM,
+    CASE_TRIGGER,
+    TO_CHAR(CASE_TAGS)        AS CASE_TAGS,
+    XML_GENERATION_DATE,
+
+    CASE
+        WHEN FSCMT_ELEMENT_ID IS NOT NULL
+         AND OUTCOME_SUB_TYPE IN (
+                SELECT SAR_OUTCOME_SUBTYPE
+                FROM SAR_OUTCOME_SUB_TYPES
+            )
+         OR OUTCOME_TYPE IN (
+                'Client Relationship Exit',
+                'Exit',
+                'Account Closure',
+                'Continuation',
+                'Continuation/Retain Client Relationship'
+            )
+        THEN ELEMENT_TYPE
+        ELSE ''
+    END AS ELEMENT_TYPE,
+
+    FSCMT_ELEMENT_ID,
+    ELEMENT_ID,
+    PARTNER_TYPE,
+
+    CASE
+        WHEN CASE_BU IN (SELECT BU_IDENTIFIER FROM BU_TO_EXCLUDE) THEN 'Anonymised'
+        ELSE PARTNER_NAME
+    END AS PARTNER_NAME,
+
+    PARTNER_INDUSTRIES,
+    PARTNER_DOMICILE_COUNTRIES,
+    PARTNER_NATIONALITY_COUNTRIES,
+
+    CASE
+        WHEN CASE_BU IN (SELECT BU_IDENTIFIER FROM BU_TO_EXCLUDE) THEN 'Anonymised'
+        ELSE ACCOUNT_NAME
+    END AS ACCOUNT_NAME,
+
+    ACCOUNT_STATUS,
+
+    CASE
+        WHEN CASE_BU IN (SELECT BU_IDENTIFIER FROM BU_TO_EXCLUDE) THEN 'Anonymised'
+        ELSE BR_NAME
+    END AS BR_NAME,
+
+    BR_STATUS_POINT_IN_TIME,
+    CURRENT_BR_STATUS,
+    BR_BALANCE_POINT_IN_TIME,
+    CURRENT_BR_BALANCE,
+    BR_CURRENCY,
+    RELATIONSHIP_STRATEGY,
+    CASE_CREATED_BY,
+    CASE_OWNER,
+    CASE_OWNER_GPN,
+    COMPLIANCE_UNIT,
+    PREDICATE_OFFENSE,
+    RISK_RATING,
+    ML_PHASE,
+    PEP,
+    SCAP,
+    SIAP,
+    NTBR,
+    SIM,
+    FIFTY_PLUS,
+    FISCAL_RISK,
+
+    CASE
+        WHEN CASE_BU IN (SELECT BU_IDENTIFIER FROM BU_TO_EXCLUDE)
+            THEN TO_CLOB('Anonymised')
+        ELSE SUMMARY_ANALYSIS
+    END AS SUMMARY_ANALYSIS,
+
+    CASE
+        WHEN CASE_BU IN (SELECT BU_IDENTIFIER FROM BU_TO_EXCLUDE)
+            THEN TO_CLOB('Anonymised')
+        ELSE SUMMARY_CONCLUSION
+    END AS SUMMARY_CONCLUSION,
+
+    CASE
+        WHEN CASE_BU IN (SELECT BU_IDENTIFIER FROM BU_TO_EXCLUDE)
+            THEN TO_CLOB('Anonymised')
+        ELSE CASE_DESCRIPTION
+    END AS CASE_DESCRIPTION,
+
+    CONFIDENTIAL,
+    DATE_LAST_UPDATE,
+    RAISED_IN_ERROR,
+
+    /* FINAL OUTCOME SUBTYPE / COMPLETION DATE (SAR logic) */
+    CASE
+        WHEN FSCMT_ELEMENT_ID IS NOT NULL
+         AND OUTCOME_SUB_TYPE IN ('STR Filing',
+                                  'SAR / STR / SMR Filing',
+                                  'SAR - Duty',
+                                  'SAR - Right')
+        THEN OUTCOME_SUB_TYPE
+        ELSE MAX_SAR_OUTCOME_ST
+    END AS OUTCOME_SUBTYPE,
+
+    CASE
+        WHEN FSCMT_ELEMENT_ID IS NOT NULL
+         AND OUTCOME_SUB_TYPE IN ('STR Filing',
+                                  'SAR / STR / SMR Filing',
+                                  'SAR - Duty',
+                                  'SAR - Right')
+        THEN COMPLETION_DATE
+        ELSE MAX_SAR_COMPLETION_DT
+    END AS SAR_COMPLETION_DT
+FROM GCU_SAR_OUTCOME_ST;
+
+/* =======================================================================
+   GRANTS (from your last snippet)
+   ======================================================================= */
+
+GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE,
+      READ, DEBUG, FLASHBACK, MERGE VIEW
+ON LC_SCMT.VW_FCSCMI_GFIU_NEW TO ADMIN;
+
+GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH,
+      QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW
+ON LC_SCMT.VW_FCSCMI_GFIU_NEW TO LC_RCM_INC WITH GRANT OPTION;
+
+GRANT SELECT ON LC_SCMT.VW_FCSCMI_GFIU_NEW TO LC_SCMT_PBI;
+
