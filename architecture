@@ -1,0 +1,74 @@
+A complete 2–3 layer MV architecture
+
+Designed specifically for:
+
+- FAST refresh (incremental)
+- Scalable nightly loads
+- Reduced join cost
+- Reduced temp usage
+- Simplified maintenance
+- Avoiding recomputation of large CTE chains
+
+Layer 1 — Base MVs (FAST refreshable)
+
+These MVs contain raw transactional tables, pre-filtered and pre-joined, and guaranteed to FAST refresh.
+
+Example:
+
+MV_ALERTS_BASE
+
+- from ALERTS, ACM_ALERT_CUSTOM_ATTRIBUTES, ACM_ALERT_AUDITS, ACM_AUDITS
+- includes all JOIN keys
+- only essential columns
+- refresh FAST on logs
+
+MV_CASE_ELEMENTS_BASE
+
+- from CASE_ELEMENTS, WORK_ITEM_ATTRIBUTES, WORK_ITEM_MULTI_VAL_ATTRIBUTES
+- pre-flattened attributes
+- guaranteed FAST with logs
+
+MV_ENTITY_BASE
+
+- from SCMT/lookups
+- reference data (COMPLETE refresh only, but tiny)
+- These base MVs are small and FAST refresh ALWAYS works.
+
+Layer 2 — Intermediate MVs (optional)
+
+Combine several base MVs to:
+
+- pre-aggregate
+- pivot attributes
+- enrich alerts with cases
+- produce flattened audit snapshots
+This reduces the workload dramatically.
+
+Layer 3 — Final View (no MV)
+
+A simple SELECT that:
+
+- joins the Layer 2 MVs
+- applies formatting (REGEXP_REPLACE, CASE, flags, etc.)
+- lightweight
+- no heavy SQL left
+
+This replaces the original 800-line monster view.
+
+What this achieves
+✔ MV refresh becomes FAST + incremental
+No more COMPLETE refresh at night.
+No more long blocking of production.
+
+✔ Report queries become instant
+Because they read from MATERIALIZED tables, not raw 22-table joins.
+
+✔ Maintenance becomes simple
+Changes go into individual base MVs instead of one huge view.
+
+✔ DBA load decreases
+No huge full refresh, no excessive TEMP/UNDO usage.
+
+✔ Most Actimize installations use this model
+Oracle recommends it for complex AML/CDD systems.
+
