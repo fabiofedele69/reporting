@@ -1,11 +1,10 @@
-CREATE OR REPLACE FORCE VIEW LC_SCMI.VW_FCSCMI_GFIU_NEW
+CREATE OR REPLACE FORCE VIEW LC_SCMT.VW_FCSCMI_GFIU_NEW
 (
     CASE_ID,
     SOURCE,
     INVESTIGATING_REGION_TEAM,
     CASE_BU,
     CASE_DIVISION,
-    CASE_ID2,
     CASE_REGIONS,
     CASE_COUNTRIES,
     LINE_OF_BUSINESS,
@@ -67,7 +66,7 @@ CREATE OR REPLACE FORCE VIEW LC_SCMI.VW_FCSCMI_GFIU_NEW
     DATE_LAST_UPDATE,
     OUTCOME_SUBTYPE
 )
-BEQUEATH
+BEQUEATH DEFINER
 AS
 WITH --
 /* =======================================================================
@@ -129,7 +128,7 @@ EMPLOYEE_DATA AS (
 /* =======================================================================
       CTE 4: REL_INVOLVED_ELEMENTS_PARTIES
       ======================================================================= */
-REL_INVOLVED_ELEMENTS_PARTIES AS (
+REL_INVOLVED_ELEMNTS_PARTIES AS (
     SELECT
         ALERT_ID,
         ALERT_TYPE_ID,
@@ -145,6 +144,7 @@ REL_INVOLVED_ELEMENTS_PARTIES AS (
         P18,
         P20,
         P21,
+        P24,
         P30,
         P31,
         P32,
@@ -188,7 +188,7 @@ RISK_FLAGS AS (
         FROM RELEVANT_CASES RC
             INNER JOIN LC_SCMT.CASE_ELEMENTS C
                     ON C.CASE_ID = RC.ALERT_ID
-            INNER JOIN REL_INVOLVED_ELEMENTS_PARTIES IEP
+            INNER JOIN REL_INVOLVED_ELEMNTS_PARTIES IEP
                     ON IEP.ALERT_ID = C.WORK_ITEM_ID
             INNER JOIN LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES RISK
                     ON RISK.WORK_ITEM_ID = IEP.ALERT_ID
@@ -272,7 +272,7 @@ BUSINESS_COVERAGE AS (
                                               OE.BUSINESS_AREA,
                                               OE.LINE_OF_BUSINESS_VAL,
                                               NVL(OE.COUNTRY_VAL, OE.COUNTRY_CODE) AS COUNTRY,
-                                              OE.UBS_ENTITY_CODE || ' - ' ||,
+                                              OE.UBS_ENTITY_CODE || ' - ' ||
                                               NVL(EMP.SORT_ENTITY_NAME, OE.UBS_ENTITY_VAL) AS UBS_ENTITY
                 FROM LC_SCMT.SCMT_OWNING_UBS_ENTITIES OE
                 INNER JOIN RELEVANT_CASES RC
@@ -307,11 +307,11 @@ BUSINESS_COVERAGE AS (
                                   WHEN IEP.ALERT_TYPE_ID = 5 THEN IEP.P43
                                   WHEN IEP.ALERT_TYPE_ID IN (1005, 1004, 1002, 1012, 18, 1014)
                                       THEN NVL(COD.COUNTRY_NAME, IEP.P43)
-                                  ELSE
+                                  ELSE ''
                                   END AS NATIONALITY,
                               CASE
                                   WHEN IEP.ALERT_TYPE_ID IN (1005, 1012, 18, 1004, 1002) THEN IEP.CS18
-                                  ELSE
+                                  ELSE ''
                                   END AS PARTNER_TYPE,
                               CASE
                                   WHEN IEP.ALERT_TYPE_ID = 4 THEN IEP.P24
@@ -337,7 +337,7 @@ BUSINESS_COVERAGE AS (
                               CASE
                                   WHEN IEP.ALERT_TYPE_ID IN (1011, 1016) THEN IEP.P21
                                   ELSE ''
-                                  END AS CURRENT_BR_STATUS
+                                  END AS CURRENT_BR_STATUS,
                               CASE
                                   WHEN IEP.ALERT_TYPE_ID IN (1011, 1016) THEN IEP.P15
                                   ELSE ''
@@ -360,7 +360,7 @@ BUSINESS_COVERAGE AS (
                                         (RF.GLOBAL_PEP = 0 AND RF.DOMESTIC_PEP IS NULL AND RF.LOCAL_PEP IS NULL) OR
                                         (RF.GLOBAL_PEP = 0 AND RF.DOMESTIC_PEP IS NULL AND RF.LOCAL_PEP = 0) OR
                                         (RF.GLOBAL_PEP = 0 AND RF.DOMESTIC_PEP = 0 AND RF.LOCAL_PEP IS NULL) OR
-                                        (RF.GLOBAL_PEP IS NULL AND RF.DOMESTIC_PEP IS NULL AND RF.LOCAL_PEP IS NULL) AND
+                                        (RF.GLOBAL_PEP IS NULL AND RF.DOMESTIC_PEP IS NULL AND RF.LOCAL_PEP IS NULL)) AND
                                         IEP.ALERT_TYPE_ID = 1012 THEN 'N'
                                     WHEN RF.PEP = 1 AND IEP.ALERT_TYPE_ID IN (1005, 18, 1004, 1002, 1016) THEN 'Y'
                                     WHEN (RF.PEP = 0 OR RF.PEP IS NULL) AND IEP.ALERT_TYPE_ID IN (1005, 18, 1004, 1002, 1016) THEN 'N'
@@ -405,7 +405,7 @@ BUSINESS_COVERAGE AS (
                                                                                   ELSE ''
                                                                                   END AS PARTY_ROLE
                     FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES WA
-                            INNER JOIN REL_INVOLVED_ELEMENTS_PARTIES IEP
+                            INNER JOIN REL_INVOLVED_ELEMNTS_PARTIES IEP
                                     ON WA.ATTRIBUTE_VALUE = IEP.ALERT_ID
                             INNER JOIN LC_RCM_INC.ACM_MD_ALERT_TYPES AT
                                     ON TO_CHAR(IEP.ALERT_TYPE_ID) = AT.ALERT_TYPE_IDENTIFIER
@@ -427,7 +427,7 @@ BUSINESS_COVERAGE AS (
                                                           SVO.INDUSTRY,
                                                           SVO.DOMICILE,
                                                           SVO.NATIONALITY,
-                                                          SVO.PARTY_TYPE,
+                                                          SVO.PARTNER_TYPE,
                                                           SVO.PARTNER_NAME,
                                                           SVO.ACCOUNT_NAME,
                                                           SVO.ACCOUNT_STATUS,
@@ -445,7 +445,7 @@ BUSINESS_COVERAGE AS (
                                                           SVO.SIM,
                                                           SVO.FIFTY_PLUS,
                                                           SVO.FISCAL_RISK,
-                                                          SVO.PARTY_ROLE,
+                                                          SVO.PARTY_ROLE
                     FROM RELEVANT_OUTCOMES RO
                         INNER JOIN LC_SCMT.CASE_ELEMENTS C
                                 ON RO.ALERT_ID = C.WORK_ITEM_ID
@@ -457,7 +457,7 @@ BUSINESS_COVERAGE AS (
                   SELECT LI.MD_REL_LIST_ITEM_VALUE AS "SAR outcome sub-types"
                   FROM LC_SCMT.MD_LIST_ITEM_RELATIONS IR
                           LEFT JOIN LC_SCMT.MD_REL_LIST_ITEMS LI
-                                    ON IR.REL_LIST_ITEM_ID = LI.MD_REL_LIST_ITEM_ID
+                                    ON IR.REL_LIST_ITEM_ID_CHLD = LI.MD_REL_LIST_ITEM_ID
                   WHERE IR.REL_LIST_ITEM_ID_PAR IN (
                         SELECT MD_REL_LIST_ITEM_ID FROM MD_REL_LIST_ITEMS WHERE MD_REL_LIST_ITEM_VALUE ='Report to Authorities')),
                 MAX_RO_OEX AS (
@@ -475,9 +475,9 @@ BUSINESS_COVERAGE AS (
                           RELATIONSHIP_STRATEGY
                     FROM (
                             SELECT CASE_ID,
+                                                                      RELATIONSHIP_STRATEGY_RANK,
                                                                       RELATIONSHIP_STRATEGY,
-                                                                      RELATIONSHIP_STRATEGY,
-                                                                      ROW_NUMBER() OVER (PARTITION BY CASE_ID ORDER BY RELATIONSHIP_STRATEGY_RANK DESC) AS RUN_STRATEGY
+                                                                      ROW_NUMBER() OVER (PARTITION BY CASE_ID ORDER BY RELATIONSHIP_STRATEGY_RANK DESC) AS RN_STRATEGY
                             FROM (
                                     SELECT O.OUTCOME_ID,
                                                                                       O.OUTCOME_TYPE,
@@ -515,9 +515,8 @@ BUSINESS_COVERAGE AS (
                                                                                             ON CE.CASE_ID = CA.ALERT_ID
                                                 WHERE A.ALERT_ID = 1007
                                                     AND A.DELETED = 0
-                                                    AND A.P32 = Report to 'Authorities')
+                                                    AND A.P32 = 'Report to Authorities')
                                 WHERE OUTCOMEROWNUMBER = 1),
-                                )
                       XML_ATTACHMENT AS (
                                 SELECT LAT.CASEID,
                                               MAX(AUD.CREATE_DATE) AS XMLATTACHDATE
@@ -603,8 +602,8 @@ BUSINESS_COVERAGE AS (
                                                     WHEN RC.CI18 = 0 OR RC.CI18 = 3001
                                                         THEN 'N'
                                                     ELSE ''
-                                                    END                                                     AS CONFIDENTIAL,
-                                            RC.LAST_UPDATE_DATE AS DATE                                 AS DATE_LAST_UPDATE,
+                                                    END                                                 AS CONFIDENTIAL,
+                                            RC.LAST_UPDATE_DATE                                         AS DATE_LAST_UPDATE,
                                             RC.P13                                                      AS RAISED_IN_ERROR,
                                             O.PARTY_ROLE                                                AS PARTY_ROLE
                           FROM RELEVANT_CASES RC
@@ -635,7 +634,7 @@ BUSINESS_COVERAGE AS (
                                             LEFT JOIN LC_RCM_INC.ACM_ALERT_CUSTOM_ATTRIBUTES INCCA
                                                                 ON INC.ALERT_CUSTOM_ATTRIBUTES_ID = INCCA.ALERT_CUSTOM_ATTRIBUTES_ID 
                                             LEFT JOIN EMPLOYEE_DATA EMPR
-                                                                ON EMPR.EMPLID = SUBSTR(NVL(INCCA.CSM22, ''), LENGHT(NVL(INCCA.CSM22, '')) - 8, 8)
+                                                                ON EMPR.EMPLID = SUBSTR(NVL(INCCA.CSM22, ''), LENGTH(NVL(INCCA.CSM22, '')) - 8, 8)
                                             LEFT JOIN XML_ATTACHMENT XML_ATT
                                                                 ON RC.ALERT_ID = XML_ATT.CASEID
                               WHERE INC.ALERT_TYPE_ID = 15
