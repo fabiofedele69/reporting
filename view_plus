@@ -576,7 +576,7 @@ BUSINESS_COVERAGE AS (
                                             O.CURRENT_BR_BALANCE                                AS CURRENT_BR_BALANCE,
                                             O.BR_CURRENCY                                       AS BR_CURRENCY,
                                             STR.RELATIONSHIP_STRATEGY                           AS RELATIONSHIP_STRATEGY,
-                                            CR.CREATED_BY                                       AS CASE_CREATED_BY,
+                                            CB.CREATED_BY                                       AS CASE_CREATED_BY,
                                             USR.FULL_NAME                                       AS CASE_OWNER,
                                             RC.OWNER_IDENTIFIER                                 AS CASE_OWNER_GPN,
                                             EMP.UBS_CDEPT_DESCR                                 AS COMPLIANCE_UNIT,
@@ -944,8 +944,8 @@ BUSINESS_COVERAGE AS (
                             MAX_SAR_OUTCOME_ST              AS OUTCOME_SUBTYPE -- issue 508 req 3
                             FROM GFIU;
                             
-                            -- GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO ADMIN;
+                           -- GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO ADMIN;
 
-                            -- GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_RMC_INC WITH GRANT OPTION;
+                           -- GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_RMC_INC WITH GRANT OPTION;
 
-                            -- GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_SCMT_PBI;
+                           -- GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_SCMT_PBI;
