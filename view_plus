@@ -1,4 +1,4 @@
-CREATE OR REPLACE FORCE VIEW LC_SCMT.VW_FCSCMI_GFIU_NEW
+CREATE OR REPLACE FORCE VIEW LC_SCMT.VW_FCSCMT_GFIU_NEW_FF
 (
     CASE_ID,
     SOURCE,
@@ -480,17 +480,18 @@ BUSINESS_COVERAGE AS (
                                                                       ROW_NUMBER() OVER (PARTITION BY CASE_ID ORDER BY RELATIONSHIP_STRATEGY_RANK DESC) AS RN_STRATEGY
                             FROM (
                                     SELECT O.OUTCOME_ID,
-                                                                                      O.OUTCOME_TYPE,
-                                                                                      CASE
-                                                                                              WHEN O.OUTCOME_TYPE = 'Client Relationship Exit' OR O.OUTCOME_TYPE = 'Exit'
+                                           O.CASE_ID,
+                                           O.OUTCOME_TYPE,
+                                            CASE
+                                                WHEN O.OUTCOME_TYPE = 'Client Relationship Exit' OR O.OUTCOME_TYPE = 'Exit'
                                                   THEN 'Exit'
-                                                                                              WHEN O.OUTCOME_TYPE = 'Continuation/Retain Client Relationship' OR 
-                                                                                                      O.OUTCOME_TYPE = 'Continuation'
-                                                                                                  THEN 'Continuation'
-                                                                                              WHEN O.OUTCOME_TYPE = 'Closed Already' OR
-                                                                                                      O.OUTCOME_TYPE = 'Closed Business Relationship' THEN 'Closed Already'
-                                                                                              ELSE ''
-                                                                                              END AS RELATIONSHIP_STRATEGY,
+                                                WHEN O.OUTCOME_TYPE = 'Continuation/Retain Client Relationship' OR 
+                                                     O.OUTCOME_TYPE = 'Continuation'
+                                                  THEN 'Continuation'
+                                                WHEN O.OUTCOME_TYPE = 'Closed Already' OR
+                                                     O.OUTCOME_TYPE = 'Closed Business Relationship' THEN 'Closed Already'
+                                                ELSE ''
+                                                END AS RELATIONSHIP_STRATEGY,
                                             CASE
                                                 WHEN O.OUTCOME_TYPE = 'Client Relationship Exit' OR O.OUTCOME_TYPE = 'Exit' THEN 3
                                                 WHEN O.OUTCOME_TYPE = 'Continuation/Retain Client Relationship' OR
@@ -942,8 +943,8 @@ BUSINESS_COVERAGE AS (
                             MAX_SAR_OUTCOME_ST              AS OUTCOME_SUBTYPE -- issue 508 req 3
                             FROM GFIU;
                             
-                            GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW TO ADMIN;
+                            GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO ADMIN;
 
-                            GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW TO LC_RMC_INC WITH GRANT OPTION;
+                            GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_RMC_INC WITH GRANT OPTION;
 
-                            GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW TO LC_SCMT_PBI;
+                            GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_SCMT_PBI;
