@@ -591,9 +591,9 @@ BUSINESS_COVERAGE AS (
                                             O.SIM,
                                             O.FIFTY_PLUS,
                                             O.FISCAL_RISK,
-                                            REGEXP_REPLACE(WT.CASE_ANALYSIS,
+                                            REGEXP_REPLACE(WIT.CASE_ANALYSIS,
                                                                         '<.+?>|<span[^>]+?[^<]+>|</span>|<span>| style="margin: 0in 0in [0-9]+pt;"|<p>.</p>|<strong>|</strong>') AS SUMMARY_ANALYSIS,
-                                            REGEXP_REPLACE(WT.CASE_CONCLUSION,
+                                            REGEXP_REPLACE(WIT.CASE_CONCLUSION,
                                                                         '<.+?>|<span[^>]+?[^<]+>|</span>|<span>| style="margin: 0in 0in [0-9]+pt;"|<p>.</p>|<strong>|</strong>') AS SUMMARY_CONCLUSION,              
                                             REGEXP_REPLACE(RC.P49,
                                                                         '<.+?>|<span[^>]+?[^<]+>|</span>|<span>| style="margin: 0in 0in [0-9]+pt;"|<p>.</p>|<strong>|</strong>') AS CASE_DESCRIPTION,
@@ -943,8 +943,8 @@ BUSINESS_COVERAGE AS (
                             MAX_SAR_OUTCOME_ST              AS OUTCOME_SUBTYPE -- issue 508 req 3
                             FROM GFIU;
                             
-                            -- GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO ADMIN;
+                           -- GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO ADMIN;
 
-                            -- GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_RMC_INC WITH GRANT OPTION;
+                           -- GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_RMC_INC WITH GRANT OPTION;
 
-                            -- GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_SCMT_PBI;
+                           -- GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_SCMT_PBI;
