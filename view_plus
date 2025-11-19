@@ -262,11 +262,11 @@ BUSINESS_COVERAGE AS (
         FROM (
                 SELECT DISTINCT RC.ALERT_ID,
                                               CASE OE.BUSINESS_DIV_CODE
-                            WHEN 'IB' THEN 'IB - Investment Bank'
-                            WHEN 'WM' THEN 'WM - Wealth Management'
-                            WHEN 'WMA' THEN 'WMA - Wealth Management Americas'
-                            WHEN 'AM' THEN 'AM - Asset Management'
-                            WHEN 'PAC' THEN 'PAC - Personal and Corporate'
+                                                    WHEN 'IB' THEN 'IB - Investment Bank'
+                                                    WHEN 'WM' THEN 'WM - Wealth Management'
+                                                    WHEN 'WMA' THEN 'WMA - Wealth Management Americas'
+                                                    WHEN 'AM' THEN 'AM - Asset Management'
+                                                    WHEN 'P&C' THEN 'P&C - Personal and Corporate'
                                               END AS CASE_BUS_COVERAGE,
                                               OE.REGION_CODE,
                                               OE.BUSINESS_AREA,
