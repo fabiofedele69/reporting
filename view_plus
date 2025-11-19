@@ -549,7 +549,7 @@ BUSINESS_COVERAGE AS (
                                               INCCA.CS20 AS REFERRAL1,
                                               INCCA.CS23 AS REFERRAL2,
                                               INCCA.CSM22 AS REFERRAL_CONTACT,
-                                              EMPR.UBS_CDEPT_DESCR AS REFFERAL_CONTACT_OU_NM,
+                                              EMPR.UBS_CDEPT_DESCR AS REFERRAL_CONTACT_OU_NM,
                                               INCCA.CS25 AS CASE_TRIGGER,
                                               RC.CSM24 AS CASE_TAGS,
                                               XML_ATT.XMLATTACHDATE AS XML_GENERATION_DATE,
