@@ -219,7 +219,7 @@ CREATED_BY AS (
     SELECT DISTINCT CL.ALERT_ID,
         USR.FULL_NAME AS CREATED_BY
     FROM CASES_LOGS CL
-        LEFT JOIN LC_RCM_INC.ACM_USERS USR
+        LEFT JOIN LC_RMC_INC.ACM_USERS USR
                               ON CL.USER_INTERNAL_ID = USR.USER_INTERNAL_ID
     WHERE CL.EVENT = 'Alert created'),
 /* =======================================================================
