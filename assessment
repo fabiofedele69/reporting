@@ -1,0 +1,176 @@
+Below is a complete, clean, copy-paste-ready assessment pack that you can run in your environment to fully analyze:
+
+✔ The materialized view definition
+✔ Its refresh method and history
+✔ Its dependencies
+✔ Whether it is VALID or NEEDS_COMPILE
+✔ Whether any jobs are refreshing it
+✔ Whether FAST refresh is even possible
+✔ Whether the source view changed
+✔ Whether objects in the dependency chain are INVALID
+
+This gives you everything DBAs normally collect before troubleshooting MV performance.
+
+✅ SECTION 1 — Check materialized view definition (core metadata)
+
+SELECT mview_name,
+       owner,
+       container_name,
+       container_id,
+       staleness,
+       build_mode,
+       refresh_mode,
+       refresh_method,
+       last_refresh_type,
+       last_refresh_date,
+       compile_state,
+       interval
+FROM dba_mviews
+WHERE owner = 'LC_SCMT'
+  AND mview_name = 'VW_FCSMT_GFIU_NEW_M';
+
+Interpretation:
+STALENESS = NEEDS_COMPILE → MV must be compiled or recreated
+REFRESH_METHOD = COMPLETE or FAST
+REFRESH_MODE = ON DEMAND or ON COMMIT
+INTERVAL NOT NULL → MV refresh scheduled at object level
+
+✅ SECTION 2 — Retrieve the actual MV DDL (definition)
+
+SELECT DBMS_METADATA.GET_DDL('MATERIALIZED_VIEW',
+                             'VW_FCSMT_GFIU_NEW_M',
+                             'LC_SCMT')
+FROM DUAL;
+
+This shows:
+The SELECT used to populate the MV
+All refresh options
+Storage, logging, tablespace, etc.
+If this returns (CLOB), click the CLOB to view it.
+
+✅ SECTION 3 — Check MV refresh history (scheduler logs)
+
+SELECT job_name,
+       status,
+       actual_start_date,
+       run_duration,
+       error#,
+       additional_info
+FROM dba_scheduler_job_run_details
+WHERE job_name LIKE '%GFIU%'
+ORDER BY actual_start_date DESC;
+
+This tells you:
+When refreshes fail
+Why (ORA error)
+Runtime duration
+
+✅ SECTION 4 — Check if there is a scheduler job refreshing it
+
+SELECT job_name,
+       enabled,
+       state,
+       last_start_date,
+       next_run_date,
+       schedule_name,
+       job_action
+FROM dba_scheduler_jobs
+WHERE UPPER(job_action) LIKE '%GFIU%'
+   OR job_name LIKE '%GFIU%';
+
+✅ SECTION 5 — Check if DBMS_JOB (legacy job) refreshes it
+
+SELECT job, what, last_date, next_date, interval, failures
+FROM dba_jobs
+WHERE WHAT LIKE '%GFIU%'
+   OR WHAT LIKE '%VW_FCSMT_GFIU_NEW_M%';
+
+✅ SECTION 6 — Check MV dependencies (critical)
+
+SELECT *
+FROM dba_dependencies
+WHERE name = 'VW_FCSMT_GFIU_NEW_M'
+  AND owner = 'LC_SCMT'
+ORDER BY referenced_owner, referenced_name;
+
+You will see:
+Base view (VW_FCSMT_GFIU_NEW_FF)
+Any tables it uses
+Any other objects (views, synonyms)
+
+✅ SECTION 7 — Check VALID/INVALID status of dependent objects
+
+SELECT owner, object_name, object_type, status
+FROM dba_objects
+WHERE owner = 'LC_SCMT'
+  AND object_name IN (
+        'VW_FCSMT_GFIU_NEW_M',
+        'VW_FCSMT_GFIU_NEW_FF'
+      );
+
+If either object is INVALID → refresh will fail.
+
+✅ SECTION 8 — Check if FAST refresh is even possible
+
+SELECT log_owner, master, log_table
+FROM dba_mview_logs
+WHERE master IN (
+  SELECT referenced_name
+  FROM dba_dependencies
+  WHERE name = 'VW_FCSMT_GFIU_NEW_FF'
+    AND owner = 'LC_SCMT'
+);
+
+If this returns zero rows, FAST refresh is impossible.
+
+✅ SECTION 9 — Check row count & size of MV
+
+SELECT COUNT(*) AS rows_in_mv
+FROM LC_SCMT.VW_FCSMT_GFIU_NEW_M;
+
+For segment size:
+
+SELECT segment_name, bytes/1024/1024 MB
+FROM dba_segments
+WHERE segment_name = 'VW_FCSMT_GFIU_NEW_M'
+  AND owner = 'LC_SCMT';
+
+
+✅ SECTION 10 — Check column list of MV source view (to detect breaking changes)
+
+SELECT column_id, column_name, data_type
+FROM dba_tab_columns
+WHERE owner = 'LC_SCMT'
+  AND table_name = 'VW_FCSMT_GFIU_NEW_FF'
+ORDER BY column_id;
+
+If column list changed after 08/08/2025 → MV must be recreated.
+
+📌 OPTIONAL — Save all this to a spool file for DBA review
+
+In SQL*Plus:
+
+SPOOL mv_assessment.txt
+
+-- paste all commands here
+
+SPOOL OFF;
+
+🟩 Next Steps (once you run these)
+
+If you provide:
+MV staleness (you already have)
+MV refresh method
+MV DDL
+Dependencies
+Refresh job details
+Column list comparison (optional)
+
+Then I will tell you:
+
+✔ whether your MV can be compiled
+✔ whether it must be recreated
+✔ why refresh is failing
+✔ what part of the view causes performance issues
+✔ how to split the architecture safely
+✔ how to guarantee a stable PROD refresh
