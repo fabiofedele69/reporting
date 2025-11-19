@@ -219,7 +219,7 @@ CREATED_BY AS (
     SELECT DISTINCT CL.ALERT_ID,
         USR.FULL_NAME AS CREATED_BY
     FROM CASES_LOGS CL
-        LEFT JOIN LC_RMC_INC.ACM_USERS USR
+        LEFT JOIN LC_RCM_INC.ACM_USERS USR
                               ON CL.USER_INTERNAL_ID = USR.USER_INTERNAL_ID
     WHERE CL.EVENT = 'Alert created'),
 /* =======================================================================
@@ -621,7 +621,7 @@ BUSINESS_COVERAGE AS (
                                                                 ON BC.ALERT_ID = RC.ALERT_ID AND BC.RID = 1
                                             RIGHT JOIN LC_SCMT.WORK_ITEM_ATTRIBUTES WIT
                                                                 ON WIT.WORK_ITEM_ID = RC.ALERT_ID
-                                            LEFT JOIN LC_RMC_INC.ACM_USERS USR
+                                            LEFT JOIN LC_RCM_INC.ACM_USERS USR
                                                                 ON RC.OWNER_INTERNAL_ID = USR.USER_INTERNAL_ID
                                             LEFT JOIN LC_RCM_INC.ACM_MD_ALERT_STATUSES STT
                                                                 ON RC.STATUS_INTERNAL_ID = STT.STATUS_INTERNAL_ID 
