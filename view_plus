@@ -494,9 +494,9 @@ BUSINESS_COVERAGE AS (
                                             CASE
                                                 WHEN O.OUTCOME_TYPE = 'Client Relationship Exit' OR O.OUTCOME_TYPE = 'Exit' THEN 3
                                                 WHEN O.OUTCOME_TYPE = 'Continuation/Retain Client Relationship' OR
-                                                                                                          O.OUTCOME_TYPE = 'Continuation' THEN 2
+                                                     O.OUTCOME_TYPE = 'Continuation' THEN 2
                                                 WHEN O.OUTCOME_TYPE = 'Closed Already' OR
-                                                                                                          O.OUTCOME_TYPE = 'Closed Business Relationship' THEN 1
+                                                     O.OUTCOME_TYPE = 'Closed Business Relationship' THEN 1
                                                 ELSE 0
                                                 END AS RELATIONSHIP_STRATEGY_RANK
                                       FROM OUTCOME_ELEMENTS O))
@@ -553,10 +553,10 @@ BUSINESS_COVERAGE AS (
                                               INCCA.CS25 AS CASE_TRIGGER,
                                               RC.CSM24 AS CASE_TAGS,
                                               XML_ATT.XMLATTACHDATE AS XML_GENERATION_DATE,
-                                              REGEXP_REPLACE(INCCA.CSB11,
+                                              REGEX_REPLACE(INCCA.CSB11,
                                                                             '<.+?>|<span[^>]+?[^<]+</span>|<span| style="margin: 0in 0in [0-9]+pt;"|<p>.</p>|<strong>|</strong>') AS SUMMARY_TRIGGER,
                                             O.OUTCOME_ID AS OUTCOME_ID,
-                                            O.OUTCOME_TYPE AS OUTCME_TYPE,
+                                            O.OUTCOME_TYPE AS OUTCOME_TYPE,
                                             O.OUTCOME_SUBTYPE                                   AS OUTCOME_SUB_TYPE,
                                             O.COMPLETION_DATE                                   AS COMPLETION_DATE,
                                             O.WORK_ITEM_TYPE                                    AS ELEMENT_TYPE,
@@ -690,18 +690,6 @@ BUSINESS_COVERAGE AS (
                                         ELEMENT_TYPE,
                                         FCSCMT_ELEMENT_ID,
                                         CASE
-                                            WHEN CASE_BU IN (
-                                                        SELECT BU_IDENTIFIER
-                                                        FROM BU_TO_EXCLUDE) THEN 'Anonymised'
-                                            ELSE SUMMARY_TRIGGER
-                                            END                      AS SUMMARY_TRIGGER,
-                                      OUTCOME_ID,
-                                      OUTCOME_TYPE,
-                                      OUTCOME_SUB_TYPE,
-                                      GCU.COMPLETION_DATE,
-                                      ELEMENT_TYPE,
-                                      FCSCMT_ELEMENT_ID,
-                                      CASE
                                           WHEN CASE_BU IN (
                                                       SELECT BU_IDENTIFIER
                                                       FROM BU_TO_EXCLUDE) 
@@ -944,8 +932,8 @@ BUSINESS_COVERAGE AS (
                             MAX_SAR_OUTCOME_ST              AS OUTCOME_SUBTYPE -- issue 508 req 3
                             FROM GFIU;
                             
-                           -- GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO ADMIN;
+                          --  GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO ADMIN;
 
-                           -- GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_RMC_INC WITH GRANT OPTION;
+                          --  GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_RMC_INC WITH GRANT OPTION;
 
-                           -- GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_SCMT_PBI;
+                          --  GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_SCMT_PBI;
