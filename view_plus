@@ -553,7 +553,7 @@ BUSINESS_COVERAGE AS (
                                               INCCA.CS25 AS CASE_TRIGGER,
                                               RC.CSM24 AS CASE_TAGS,
                                               XML_ATT.XMLATTACHDATE AS XML_GENERATION_DATE,
-                                              REGEX_REPLACE(INCCA.CSB11,
+                                              REGEXP_REPLACE(INCCA.CSB11,
                                                                             '<.+?>|<span[^>]+?[^<]+</span>|<span| style="margin: 0in 0in [0-9]+pt;"|<p>.</p>|<strong>|</strong>') AS SUMMARY_TRIGGER,
                                             O.OUTCOME_ID AS OUTCOME_ID,
                                             O.OUTCOME_TYPE AS OUTCOME_TYPE,
