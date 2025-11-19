@@ -19,7 +19,7 @@ CREATE OR REPLACE FORCE VIEW LC_SCMT.VW_FCSCMT_GFIU_NEW_FF
     DATE_REPORTED,
     REFERRAL,
     REFERRAL_CONTACT,
-    REFERRAL_CONTACT_NUM,
+    REFERRAL_CONTACT_OU_NM,
     CASE_TRIGGER,
     SUMMARY_TRIGGER,
     CASE_TAGS,
@@ -224,9 +224,9 @@ CREATED_BY AS (
                               ON CL.USER_INTERNAL_ID = USR.USER_INTERNAL_ID
     WHERE CL.EVENT = 'Alert created'),
 /* =======================================================================
-      CTE 8: REOPENED_AS
+      CTE 8: REOPENED
       ======================================================================= */
-REOPENED_AS AS (
+REOPENED AS (
     SELECT
         MAX(CL.CREATE_DATE) AS TRANS_DATE,
         CL.ALERT_ID
@@ -235,9 +235,9 @@ REOPENED_AS AS (
       AND CL.EVENT = 'Status changed'
     GROUP BY CL.ALERT_ID),
 /* =======================================================================
-      CTE 9: COMPLETED_AS
+      CTE 9: COMPLETED
       ======================================================================= */
-COMPLETED_AS AS (
+COMPLETED AS (
     SELECT
         MAX(CL.CREATE_DATE) AS TRANS_DATE,
         CL.ALERT_ID
@@ -943,8 +943,8 @@ BUSINESS_COVERAGE AS (
                             MAX_SAR_OUTCOME_ST              AS OUTCOME_SUBTYPE -- issue 508 req 3
                             FROM GFIU;
                             
-                            GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO ADMIN;
+                            -- GRANT DELETE, INSERT, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO ADMIN;
 
-                            GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_RMC_INC WITH GRANT OPTION;
+                            -- GRANT DELETE, INSERT, REFERENCES, SELECT, UPDATE, ON COMMIT REFRESH, QUERY REWRITE, READ, DEBUG, FLASHBACK, MERGE VIEW ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_RMC_INC WITH GRANT OPTION;
 
-                            GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_SCMT_PBI;
+                            -- GRANT SELECT ON LC_SCMT.VW_FCSCMT_GFIU_NEW_FF TO LC_SCMT_PBI;
