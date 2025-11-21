@@ -1,0 +1,54 @@
+                 ┌─────────────────────────────────────────┐
+                 │         LAYER 3 – REPORTING             │
+                 │  Materialized View (Refreshed Nightly)  │
+                 │─────────────────────────────────────────│
+                 │     VW_FCSCMT_GFIU_NEW_M                │
+                 │        (Materialized View)              │
+                 └─────────────────────────────────────────┘
+                                   ▲
+                                   │  SELECT (explicit columns)
+                                   │
+                 ┌─────────────────────────────────────────┐
+                 │   LAYER 2 – BUSINESS / INTEGRATION      │
+                 │     Human-Readable Final Presentation   │
+                 │─────────────────────────────────────────│
+                 │     VW_FCSCMT_GFIU_NEW                  │
+                 │         (Standard View)                 │
+                 │  FROM V_FCSCMT_GFIU                     │
+                 └─────────────────────────────────────────┘
+                                   ▲
+                                   │  Final business SELECT
+                                   │
+                 ┌──────────────────────────────────────────────┐
+                 │   LAYER 1 – BASE / ATOMIC LOGIC              │
+                 │   (Decomposed from original CTEs)            │
+                 │──────────────────────────────────────────────│
+                 │  V_FCSCMT_GFIU       ← Main assembly         │
+                 │     ▲                                        |
+                 │     │  Uses all the atomic parts below       │
+                 │     │                                        │
+                 │  ┌────────────────────────────────────────┐  │
+                 │  │      Atomic Views (former CTEs)        │  │
+                 │  │                                        │  │
+                 │  │  V_FCSCMT_RELEVANT_CASES               │  │
+                 │  │  V_FCSCMT_BUSINESS_COVERAGE            │  │
+                 │  │  V_FCSCMT_OUTCOME_ELEMENTS             │  │
+                 │  │  V_FCSCMT_GLOBAL_CASE_UNMASK           │  │
+                 │  │  V_FCSCMT_SELECTED_VALUE_OUTCOME       │  │
+                 │  │  V_FCSCMT_RISK_FLAGS                   │  │
+                 │  │  V_FCSCMT_EMPLOYEE_DATA                │  │
+                 │  │  V_FCSCMT_CASE_LATEST_FILED_OUTCOME    │  │
+                 │  │  V_FCSCMT_XML_ATTACHMENT               │  │
+                 │  │  V_FCSCMT_BU_TO_EXCLUDE                │  │
+                 │  │  ... (all CTEs now as views)           │  │
+                 │  └────────────────────────────────────────┘  │
+                 └──────────────────────────────────────────────┘
+                                   ▲
+                                   │
+                                   │  Base tables (existing)
+                                   ▼
+         ┌───────────────────────────────────────────────────────────────┐
+         │                  Source Tables (unchanged)                    │
+         │   LC_RCM_INC.ALERTS, CASES, CASE_ELEMENTS, OUTCOMES,          │
+         │   CASE_PARTIES, LOGS, EMPLOYEE_DATA, REFERENCE TABLES, etc.   │
+         └───────────────────────────────────────────────────────────────┘
