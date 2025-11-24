@@ -1,0 +1,95 @@
+-- ====================================================================
+-- ORACLE ENVIRONMENT HEALTH CHECK – LC_SCMT
+-- ====================================================================
+
+PROMPT === PGA Statistics ===
+SELECT name, value
+FROM v$pgastat
+WHERE name IN (
+  'aggregate PGA target parameter',
+  'aggregate PGA auto target',
+  'total PGA inuse',
+  'total PGA allocated',
+  'cache hit percentage',
+  'over allocation count'
+);
+
+PROMPT === SGA Components ===
+SELECT component, ROUND(current_size/1024/1024,1) AS size_mb
+FROM v$sga_dynamic_components
+WHERE current_size > 0
+ORDER BY size_mb DESC;
+
+PROMPT === Library Cache Reload Ratios ===
+SELECT namespace,
+       pins,
+       reloads,
+       ROUND((reloads/pins)*100, 2) AS reload_ratio_pct
+FROM v$librarycache
+WHERE pins > 0
+ORDER BY reload_ratio_pct DESC;
+
+PROMPT === Temporary Tablespace Usage ===
+SELECT tablespace_name,
+       ROUND((tablespace_size - free_space)/1024/1024,2) AS used_mb,
+       ROUND(free_space/1024/1024,2) AS free_mb,
+       ROUND(tablespace_size/1024/1024,2) AS total_mb,
+       ROUND((1 - free_space/tablespace_size)*100,2) AS pct_used
+FROM v$temp_space_header;
+
+PROMPT === Top TEMP Consumers ===
+SELECT s.sid, s.serial#, s.username, 
+       t.tablespace, t.blocks*8192/1024/1024 AS mb_used,
+       a.sql_id, SUBSTR(a.sql_text,1,80) AS sql_snippet
+FROM v$tempseg_usage t
+JOIN v$session s ON t.session_addr = s.saddr
+JOIN v$sqlarea a ON t.sql_id = a.sql_id
+ORDER BY mb_used DESC;
+
+PROMPT === Buffer Cache & Shared Pool Efficiency ===
+SELECT name, value
+FROM v$sysstat
+WHERE name IN (
+  'session logical reads',
+  'physical reads cache',
+  'physical reads direct',
+  'redo size'
+);
+
+PROMPT === Invalid or Unusable Objects (LC_SCMT) ===
+SELECT object_type, COUNT(*) AS invalid_count
+FROM dba_objects
+WHERE owner = 'LC_SCMT'
+AND status <> 'VALID'
+GROUP BY object_type
+ORDER BY invalid_count DESC;
+
+PROMPT === Unusable Indexes (LC_SCMT) ===
+SELECT index_name, table_name, status
+FROM dba_indexes
+WHERE owner = 'LC_SCMT'
+AND status <> 'VALID';
+
+PROMPT === Index Usage Statistics (LC_SCMT) ===
+SELECT i.table_name,
+       i.index_name,
+       u.used,
+       u.start_monitoring,
+       u.end_monitoring
+FROM v$object_usage u
+JOIN dba_indexes i
+  ON i.index_name = u.index_name
+WHERE i.owner = 'LC_SCMT'
+ORDER BY u.used DESC NULLS LAST;
+
+PROMPT === Schema Segment Usage (Top 10 by Size) ===
+SELECT * FROM (
+  SELECT segment_name, segment_type,
+         ROUND(bytes/1024/1024,1) AS size_mb
+  FROM dba_segments
+  WHERE owner = 'LC_SCMT'
+  ORDER BY bytes DESC
+) WHERE ROWNUM <= 10;
+
+PROMPT === End of Report ===
+
