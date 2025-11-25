@@ -1,0 +1,65 @@
+SET LINESIZE 180
+SET PAGESIZE 50
+SET SERVEROUTPUT ON
+CLEAR SCREEN
+
+-- Adjust the loop count and sleep interval (seconds) as needed
+DECLARE
+  v_loop INTEGER := 9999;  -- number of refresh cycles
+BEGIN
+  FOR i IN 1..v_loop LOOP
+    DBMS_OUTPUT.PUT_LINE('====================================================');
+    DBMS_OUTPUT.PUT_LINE('Timestamp: ' || TO_CHAR(SYSDATE, 'YYYY-MM-DD HH24:MI:SS'));
+
+    DBMS_OUTPUT.PUT_LINE(CHR(10) || '--- TEMP Tablespace Usage (MB) ---');
+    FOR r IN (
+      SELECT tablespace_name,
+             ROUND(SUM(bytes_used)/1024/1024,1) AS mb_used,
+             ROUND(SUM(bytes_free)/1024/1024,1) AS mb_free
+      FROM v$temp_space_header
+      GROUP BY tablespace_name
+    ) LOOP
+      DBMS_OUTPUT.PUT_LINE('Tablespace: ' || r.tablespace_name ||
+                           ' | Used: ' || r.mb_used ||
+                           ' MB | Free: ' || r.mb_free || ' MB');
+    END LOOP;
+
+    DBMS_OUTPUT.PUT_LINE(CHR(10) || '--- MV Refresh Status ---');
+    FOR r IN (
+      SELECT mview_name,
+             last_refresh_type,
+             last_refresh_date,
+             staleness,
+             compile_state
+      FROM user_mviews
+      WHERE mview_name = 'VW_FCSCMT_GFIU_NEW'
+    ) LOOP
+      DBMS_OUTPUT.PUT_LINE('MV: ' || r.mview_name ||
+                           ' | Last Refresh: ' || TO_CHAR(r.last_refresh_date,'YYYY-MM-DD HH24:MI:SS') ||
+                           ' | State: ' || r.compile_state ||
+                           ' | Staleness: ' || r.staleness);
+    END LOOP;
+
+    DBMS_OUTPUT.PUT_LINE(CHR(10) || '--- Active SQL Monitor Entries ---');
+    FOR r IN (
+      SELECT sql_id,
+             status,
+             ROUND(elapsed_time/1000000,1) AS elapsed_s,
+             ROUND(temp_space/1024/1024,1) AS temp_mb,
+             px_servers_allocated,
+             SUBSTR(sql_text,1,80) AS sql_text
+      FROM v$sql_monitor
+      WHERE sql_text LIKE '%VW_FCSCMT_GFIU_NEW%'
+      ORDER BY elapsed_time DESC
+    ) LOOP
+      DBMS_OUTPUT.PUT_LINE('SQL_ID: ' || r.sql_id ||
+                           ' | Status: ' || r.status ||
+                           ' | Elapsed: ' || r.elapsed_s || ' s' ||
+                           ' | TEMP: ' || r.temp_mb || ' MB' ||
+                           ' | PX: ' || r.px_servers_allocated);
+    END LOOP;
+
+    DBMS_LOCK.SLEEP(30); -- refresh interval in seconds
+  END LOOP;
+END;
+/
