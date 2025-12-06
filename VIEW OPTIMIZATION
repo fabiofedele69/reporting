@@ -285,3 +285,23 @@ Safe for very large concatenated text (CLOB)
 Index-friendly (explicit numeric conversion)
 Optimal for Oracle 19c (CLOB-aware LISTAGG)
 Parallelizable & maintainable
+
+⚙️ Corrected final view (Option 1 — recommended for 19c)
+
+CREATE OR REPLACE FORCE VIEW LC_SCMT.V_FCSMT_MCH_ALL_PREDICATES
+(
+    CASEID,
+    ALLPREDICATEOFFENSE
+)
+BEQUEATH DEFINER AS
+SELECT
+    WMAL.WORK_ITEM_ID AS CaseID,
+    RTRIM(
+        LISTAGG(TO_CLOB(PO.NAME) || ', ') WITHIN GROUP (ORDER BY PO.NAME),
+        ', '
+    ) AS AllPredicateOffense
+FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES WMAL
+LEFT JOIN LC_SCMT.MD_PREDICATE_OFFENCE PO
+    ON PO.PREDICATE_OFFENCE_ID = TO_NUMBER(WMAL.ATTRIBUTE_VALUE)
+WHERE WMAL.ATTRIBUTE_TYPE = 5119
+GROUP BY WMAL.WORK_ITEM_ID;
