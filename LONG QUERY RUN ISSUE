@@ -1,0 +1,241 @@
+🧩 1️⃣ How Actimize Stores and Executes SQL Statements
+
+In NICE Actimize (whether RCM, SAM, WLF, or CDD modules), custom or dynamic SQL queries — like the one you saw (WITH PredicateOffences AS ...) — are not hardcoded in the Java or .NET code.
+Instead, they are stored in metadata configuration tables inside the schema.
+
+Typical examples (depending on your module):
+
+| Common Table                                            | Description                                                      |
+| ------------------------------------------------------- | ---------------------------------------------------------------- |
+| `AI_CM_DRILL_DOWN_QUERIES`                              | Stores SQL for case drilldowns (usually the kind you’re seeing). |
+| `AI_CM_INCIDENT_QUERIES`                                | Stores queries for incident management or alert details.         |
+| `AI_RCM_INC_QUERIES` or `LC_RCM_INC_DRILL_DOWN_QUERIES` | RCM (Risk Case Manager)–specific.                                |
+| `AI_CM_QUERIES`                                         | Holds general SQL templates used by UI widgets or dashboards.    |
+
+Each usually has columns like:
+
+QUERY_ID
+QUERY_NAME
+QUERY_TYPE
+QUERY (CLOB)
+MODULE
+PARAMETERS
+
+The CLOB column QUERY contains the actual SQL (your WITH ... block).
+The GUI or backend logic (Java service) pulls that query dynamically at runtime and executes it.
+
+🧠 2️⃣ How the GUI “Invokes” It
+
+Here’s what happens under the hood when a user clicks something in the Actimize GUI (for example, an “Alert Details” drilldown):
+
+1. The GUI (web application) calls a REST or SOAP service in the Actimize Application Server (Java layer).
+2. That service uses the query name or ID configured for that screen.
+
+  - For example, it might call:
+
+    select * from LC_RCM_INC_DRILL_DOWN_QUERIES where QUERY_NAME = 'AlertPredicateOffences';
+
+3. The application reads the SQL text from the QUERY CLOB column.
+4. It replaces placeholders like ${ALERT_ID}, ${USER_ID}, or :param1 with runtime parameters.
+5. It executes the resulting SQL on the Oracle database through JDBC (as the JDBC Thin Client module, which is exactly what you saw in the AWR report).
+
+So — the GUI event → Java backend → query name → CLOB SQL → executed via JDBC Thin Client path explains what you saw in AWR.
+
+🧭 3️⃣ How to Map GUI → SQL
+
+Here’s how you can trace it:
+
+Step 1 – Identify the query name or ID
+In AWR, your SQL had:
+SELECT ... FROM LC_RCM_INC_DRILL_DOWN_QUERIES WHERE QUERY_NAME = :1
+or similar at the top — this tells you which metadata record was used.
+
+If you can’t see it, look for a string like:
+... FROM LC_RCM_INC_DRILL_DOWN_QUERIES WHERE QUERY_NAME = 'PredicateOffences'
+That’s the key link between GUI and SQL.
+
+Step 2 – Query the configuration table
+Run this in SQL Developer:
+
+SELECT QUERY_ID,
+       QUERY_NAME,
+       MODULE,
+       PARAMETERS,
+       DBMS_LOB.SUBSTR(QUERY, 4000, 1) AS QUERY_SNIPPET
+FROM   LC_RCM_INC_DRILL_DOWN_QUERIES
+WHERE  QUERY_NAME LIKE '%PredicateOffences%';
+
+That gives you the definition the GUI is using.
+
+Step 3 – Look up the GUI element
+
+In the Actimize Model Designer or Web Admin → Configuration → Queries section,
+find that same query name.
+You’ll see the configuration for:
+The operation or drilldown name,
+The module or screen (e.g., Case Manager Alert view),
+The parameters (like ALERT_ID, ENTITY_ID),
+The SQL body (the WITH clause you saw).
+So the GUI screen is tied to that query by name.
+
+Step 4 – Trace the backend execution (optional deep dive)
+
+If you have access to logs on the Actimize Application Server:
+ - Search in the logs (e.g., actimize.log, application.log) for the query name:
+    grep -i "PredicateOffences" actimize.log
+ - You’ll see entries like:
+    Executing DrillDownQuery: PredicateOffences with parameters [ALERT_ID=12345]
+That log line tells you exactly which GUI action fired the SQL.
+
+🧩 4️⃣ Example of Full Trace
+
+| Step | Layer                            | What happens                                                                        |
+| ---- | -------------------------------- | ----------------------------------------------------------------------------------- |
+| 1    | User clicks “Alert Offences” tab | GUI calls API endpoint `/rcm/alerts/drilldown`                                      |
+| 2    | App server                       | Finds configured query name `PredicateOffences`                                     |
+| 3    | Database                         | Loads SQL from `LC_RCM_INC_DRILL_DOWN_QUERIES.QUERY`                                |
+| 4    | App server                       | Replaces `${ALERT_ID}` parameter                                                    |
+| 5    | DB (AWR capture)                 | Runs query via JDBC Thin Client → appears in AWR as `WITH PredicateOffences AS ...` |
+| 6    | GUI                              | Renders the results in the Alert details screen                                     |
+
+⚙️ 5️⃣ How to Reverse-Engineer This Yourself
+
+To map any GUI action to SQL:
+In the GUI, perform the action (e.g., open an alert tab).
+In the DB, check AWR or V$SQLAREA filtered by MODULE='JDBC Thin Client' and your schema (CFC5CM3C).
+Look for the query name in the SQL text.
+Query the metadata table (*_QUERIES) to see its CLOB definition.
+Optionally, review the logs for the same query name.
+
+✅ TL;DR Summary
+| Question                       | Answer                                                                                      |
+| ------------------------------ | ------------------------------------------------------------------------------------------- |
+| **Where is the SQL stored?**   | In Actimize configuration tables (`*_QUERIES`), column `QUERY` (CLOB).                      |
+| **How is it executed?**        | GUI calls backend → backend fetches SQL from table → JDBC executes it.                      |
+| **Why does it appear in AWR?** | Because it’s executed through JDBC Thin Client on Oracle.                                   |
+| **How to link GUI to SQL?**    | Use `QUERY_NAME` from AWR → find record in config table → confirm parameters in GUI / logs. |
+
+🧠 Overview of What This SQL Does
+This is a complex multi-CTE query built for a materialized view or report (likely an Actimize drilldown).
+
+It defines four Common Table Expressions (CTEs):
+1. PredicateOffences
+2. Passports
+3. REGION
+4. OWN_ENT
+Each one builds an intermediate aggregation, and they’re later combined (in the unseen part) into the final SELECT.
+
+🔍 What’s Happening Inside Each CTE
+
+1️⃣ PredicateOffences
+SELECT listagg(po.predicate_offence_id || ':' || po.description, ',') ...
+FROM LC_SCMT.WORK_ITEM_MULT_VAL_ATTRIBUTES ATTRIB
+LEFT JOIN LC_SCMT.md_predicate_offence po
+  ON ATTRIB.ATTRIBUTE_VALUE = po.predicate_offence_id
+WHERE ATTRIB.ATTRIBUTE_TYPE = 5119
+GROUP BY ATTRIB.WORK_ITEM_ID
+
+✅ Purpose: Builds a comma-separated list (LISTAGG) of predicate offences for each work item.
+⚠️ Issues:
+
+- LISTAGG on a large dataset can be very CPU and memory heavy (especially without parallelism).
+- No filtering by WORK_ITEM_ID before aggregation — so it scans the entire table where ATTRIBUTE_TYPE = 5119.
+- LEFT JOIN on an unfiltered column (ATTRIBUTE_VALUE) might not use an index.
+
+🧩 Optimization ideas:
+
+- Ensure index exists on (ATTRIBUTE_TYPE, ATTRIBUTE_VALUE) in WORK_ITEM_MULT_VAL_ATTRIBUTES.
+- If WORK_ITEM_ID has high cardinality, consider breaking into batches or aggregating incrementally (materialized sub-view).
+
+2️⃣ Passports
+SELECT listagg(ATTRIB.ATTRIBUTE_VALUE, ',') ...
+FROM LC_SCMT.WORK_ITEM_MULT_VAL_ATTRIBUTES ATTRIB
+WHERE ATTRIB.ATTRIBUTE_TYPE = 5998
+GROUP BY ATTRIB.WORK_ITEM_ID
+
+✅ Purpose: Aggregates passport-type attributes by work item.
+⚠️ Issues:
+- Same structure and risk as above: full scan on the same large table, but different attribute type.
+- This likely scans the same table twice — Oracle will treat each CTE independently.
+
+🧩 Optimization ideas:
+- Combine PredicateOffences and Passports into a single scan with conditional aggregation:
+    SELECT work_item_id,
+           listagg(CASE WHEN attribute_type=5119 THEN po.predicate_offence_id||':'||po.description END, ',') AS predicate_offences,
+           listagg(CASE WHEN attribute_type=5998 THEN attribute_value END, ',') AS passports
+    FROM ...
+    GROUP BY work_item_id;
+
+→ Cuts I/O in half and avoids repeated full scans.
+
+3️⃣ REGION
+SELECT DISTINCT NVL(LR.MD_REL_LIST_ITEM.VALUE, ...) AS Region,
+       a.alert_id AS work_item_id
+FROM LC_RCM_INC.ALERTS a
+INNER JOIN LC_SCMT.MD_REL_LIST_ITEMS LR ...
+INNER JOIN LC_SCMT.BUSINESS_UNIT_DEPENDENCIES BU ...
+INNER JOIN LC_SCMT.MD_REL_LIST_ITEMS LRMD ...
+
+✅ Purpose: Gets regional information for alerts.
+⚠️ Issues:
+- DISTINCT across multiple joins suggests duplication due to one-to-many relationships — expensive sort/hash deduplication.
+- Several INNER JOINs to large master tables, possibly without proper predicates.
+- No filters on alerts (e.g., by status/date), which can inflate join size dramatically.
+
+🧩 Optimization ideas:
+
+- Add selective predicates (e.g., WHERE a.alert_status = 'OPEN').
+- Check indexes on join keys:
+    - LC_RCM_INC.ALERTS.ALERT_ID
+    - LC_SCMT.MD_REL_LIST_ITEMS.LIST_ITEM_ID
+    - LC_SCMT.BUSINESS_UNIT_DEPENDENCIES.BU_ID
+- If possible, pre-materialize region mapping into a smaller lookup view.
+
+4️⃣ OWN_ENT
+SELECT OE.ALERT_ID AS alert_id,
+       LISTAGG( NVL(oe.business_div_code, '') || '|' || NVL(oe.business_division, '') || ... )
+       WITHIN GROUP (ORDER BY oe.alert_id ASC) AS OWN_ENT
+FROM LC_SCMT.MT_OWNING_UBS_ENTITIES OE
+UNION SELECT 'Investment Bank' ... FROM DUAL
+UNION SELECT 'Wealth Management' ... FROM DUAL
+...
+
+✅ Purpose: Builds ownership hierarchy text by alert.
+⚠️ Issues:
+- LISTAGG again — string aggregation on potentially large table.
+- Multiple UNIONs against DUAL for static code mappings — inefficient and unnecessary; should be replaced by a small lookup table or inline values clause:
+    SELECT * FROM (VALUES ('Investment Bank','IB'), ('Wealth Management','WM')) ...
+- UNION (default = DISTINCT) repeatedly sorts and deduplicates — use UNION ALL if no duplicates.
+
+🧩 Optimization ideas:
+
+Replace UNION with UNION ALL if duplicates aren’t an issue.
+Move constant mappings into a joinable small table (1-time lookup).
+Index ALERT_ID on MT_OWNING_UBS_ENTITIES.
+
+🧮 Performance Summary (Partial SQL)
+| CTE                 | Likely Cost Driver    | Optimization Hint                                      |
+| ------------------- | --------------------- | ------------------------------------------------------ |
+| `PredicateOffences` | Full scan + LISTAGG   | Combine with `Passports`, index `ATTRIBUTE_TYPE`       |
+| `Passports`         | Full scan + LISTAGG   | Same as above                                          |
+| `REGION`            | Multi-join + DISTINCT | Add filters, verify join indexes                       |
+| `OWN_ENT`           | LISTAGG + UNIONs      | Use `UNION ALL`, replace DUAL unions with lookup table |
+
+⚙️ General Observations
+1. Multiple full scans of the same large table (WORK_ITEM_MULT_VAL_ATTRIBUTES) — major CPU and I/O cost.
+2. Repeated LISTAGG operations — known CPU hotspot.
+3. Unnecessary DISTINCT and UNION sorts — sorting costs spike exponentially with data volume.
+4. No selective predicates — everything aggregates all data.
+5. Possible join fan-out — multiple joins may multiply rows before grouping.
+
+✅ Tuning Recommendations (Next Steps)
+
+| Area             | Action                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| **Data reuse**   | Materialize heavy CTEs into global temporary tables if reused multiple times.                  |
+| **Reduce scans** | Combine CTEs on same table with CASE aggregation.                                              |
+| **Aggregation**  | Consider using `XMLAGG` or analytic functions for string concatenation if `LISTAGG` overflows. |
+| **Sorting**      | Use `UNION ALL` instead of `UNION` when possible.                                              |
+| **Statistics**   | Ensure accurate stats on all large base tables, especially `WORK_ITEM_MULT_VAL_ATTRIBUTES`.    |
+| **Parallelism**  | Enable `PARALLEL` hint or `ALTER MATERIALIZED VIEW ... PARALLEL` to exploit CPU cores.         |
+
