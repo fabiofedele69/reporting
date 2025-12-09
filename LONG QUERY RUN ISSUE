@@ -239,3 +239,210 @@ Index ALERT_ID on MT_OWNING_UBS_ENTITIES.
 | **Statistics**   | Ensure accurate stats on all large base tables, especially `WORK_ITEM_MULT_VAL_ATTRIBUTES`.    |
 | **Parallelism**  | Enable `PARALLEL` hint or `ALTER MATERIALIZED VIEW ... PARALLEL` to exploit CPU cores.         |
 
+********************************** FINAL CONCLUSION OVERALL SQL ****************************************************
+
+1. Repeated full scans + LISTAGG on the same table
+
+CTEs:
+WITH PredicateOffences AS (
+  SELECT listagg(... ) ... 
+  FROM LC_SCMT.WORK_ITEM_MULT_VAL_ATTRIBUTES ATTRIB
+  LEFT JOIN LC_SCMT.MD_PREDICATE_OFFENCE po
+        ON ATTRIB.ATTRIBUTE_VALUE = po.predicate_offence_id
+  WHERE ATTRIB.ATTRIBUTE_TYPE = 5119
+  GROUP BY ATTRIB.WORK_ITEM_ID
+),
+Passports AS (
+  SELECT listagg(ATTRIB.ATTRIBUTE_VALUE, ',') ...
+  FROM LC_SCMT.WORK_ITEM_MULT_VAL_ATTRIBUTES ATTRIB
+  WHERE ATTRIB.ATTRIBUTE_TYPE = 5998
+  GROUP BY ATTRIB.WORK_ITEM_ID
+),
+...
+
+Issues:
+- Same table scanned multiple times (WORK_ITEM_MULT_VAL_ATTRIBUTES), once per CTE.
+- LISTAGG is CPU-heavy; doing it twice over similar data doubles the cost.
+- In the final query you only need rows for the selected alerts (a.alert_id), but these CTEs appear to aggregate all work items, then later you join:
+
+    LEFT JOIN PredicateOffences PR ON PR.work_item_id = a.alert_id
+    LEFT JOIN Passports        P  ON P.work_item_id  = a.alert_id
+
+If the CTE is not fully “merged” by the optimizer, you’re computing aggregates for all rows, to then keep just a handful.
+
+Tuning ideas:
+
+Combine them into one scan with conditional aggregation:
+
+WITH AggAttributes AS (
+  SELECT work_item_id,
+         listagg(CASE WHEN attribute_type = 5119
+                      THEN po.predicate_offence_id || ':' || po.description
+                 END, ',') AS predicate_offences,
+         listagg(CASE WHEN attribute_type = 5998
+                      THEN attribute_value
+                 END, ',') AS passports
+  FROM LC_SCMT.WORK_ITEM_MULT_VAL_ATTRIBUTES a
+  LEFT JOIN LC_SCMT.MD_PREDICATE_OFFENCE po
+         ON a.attribute_value = po.predicate_offence_id
+  WHERE attribute_type IN (5119, 5998)
+  GROUP BY work_item_id
+)
+...
+LEFT JOIN AggAttributes agg ON agg.work_item_id = a.alert_id
+
+- Make sure you have an index such as WORK_ITEM_MULT_VAL_ATTRIBUTES (WORK_ITEM_ID, ATTRIBUTE_TYPE, ATTRIBUTE_VALUE).
+- If this query is usually run for a single alert (as suggested by WHERE a.alert_id = 'adv_20250410_00009' in your test), you can also rewrite as correlated aggregates:
+
+SELECT (SELECT listagg(... )
+        FROM WORK_ITEM_MULT_VAL_ATTRIBUTES ...
+        WHERE work_item_id = a.alert_id AND attribute_type = 5119) AS predicateoffences,
+       (SELECT listagg(... )
+        FROM WORK_ITEM_MULT_VAL_ATTRIBUTES ...
+        WHERE work_item_id = a.alert_id AND attribute_type = 5998) AS passports,
+       ...
+FROM LC_RCM_INC.ALERTS a
+...
+
+That lets the optimizer use work_item_id as a selective predicate instead of aggregating everything.
+
+2. REGION CTE – DISTINCT + multi-join
+
+REGION AS (
+  SELECT DISTINCT
+         NVL(LR.MD_REL_LIST_ITEM_VALUE, ...) AS Region,
+         a.alert_id AS work_item_id
+  FROM LC_RCM_INC.ALERTS a
+  JOIN LC_SCMT.MD_REL_LIST_ITEMS LR ...
+  JOIN LC_SCMT.BUSINESS_UNIT_DEPENDENCIES BU ...
+  JOIN LC_SCMT.MD_REL_LIST_ITEMS LRMD ...
+)
+...
+LEFT JOIN REGION LR ON LR.work_item_id = a.alert_id
+
+Issues:
+- DISTINCT on a multi-join result usually means row-duplication somewhere → expensive sort or hash dedupe.
+- Again, if you run this for a small number of alerts, precomputing REGION for all alerts is wasted work.
+
+Tuning ideas:
+- If each alert logically has only one region, fix the join so it doesn’t duplicate rows and drop DISTINCT.
+- Push the alert filter inside the CTE:
+
+REGION AS (
+  SELECT ...
+  FROM ALERTS a
+  ...
+  WHERE a.alert_type_id = 3   -- and/or matching filters
+)
+
+- Or do this join directly in the main FROM clause instead of via a CTE, letting the optimizer pick the best join order.
+
+Make sure there are indexes on the join keys used here (IDs in the MD_* and BUSINESS_UNIT_DEPENDENCIES tables).
+
+3. OWN_ENT CTE – LISTAGG + UNIONs from DUAL
+In OWN_ENT AS you:
+- Build a big LISTAGG over MT_OWNING_UBS_ENTITIES OE,
+- Add a series of UNION queries selecting constant values from DUAL.
+Issues:
+- UNION (not UNION ALL) forces a sort/dedup each time—unnecessary if you know constants are unique.
+- Using lots of SELECT ... FROM DUAL is clumsy and can hurt readability/perf.
+Tuning ideas:
+- Use UNION ALL unless you genuinely expect duplicates:
+   
+    UNION ALL SELECT 'Investment Bank' AS BUSINESS_DIVISION, 'IB' AS BUS_DIV_CODE, 1 RID FROM DUAL
+    ...
+
+- Better: put those static mappings into a tiny lookup table and JOIN it — the optimizer can treat it much more efficiently.
+- As with other CTEs, make sure MT_OWNING_UBS_ENTITIES has an index on ALERT_ID.
+
+4. Correlated subquery to get latest audit record
+In the FROM section:
+INNER JOIN LC_RCM_INC.ACM_ALERT_CUSTOM_ATTRIBUTES ac
+   ON ac.ALERT_CUSTOM_ATTRIBUTES_ID = a.alert_custom_attributes_id
+INNER JOIN LC_RCM_INC.ACM_AUDITS aud
+   ON aud.AUDIT_INTERNAL_ID = (
+        SELECT aud.audit_internal_id
+        FROM LC_RCM_INC.ACM_AUDITS aud
+        JOIN LC_RCM_INC.ACM_ALERT_AUDITS alertaud
+          ON alertaud.audit_internal_id = aud.audit_internal_id
+        JOIN LC_RCM_INC.ALERTS alert
+          ON alert.alert_internal_id = alertaud.alert_internal_id
+        WHERE alert.alert_id = a.alert_id
+          AND (aud.event LIKE '%created' OR aud.event LIKE '%updated')
+        ORDER BY aud.create_date DESC
+        FETCH FIRST 1 ROWS ONLY
+      )
+
+Issues:
+- This is a scalar correlated subquery with join + sort. If the main query returns many alerts (e.g., in MV refresh), this pattern is very expensive (one subquery per alert).
+- The ORDER BY ... FETCH FIRST 1 ROWS ONLY means a sort or Top-N per alert.
+
+Tuning ideas:
+- Precompute “latest audit per alert” in one pass, then join:
+
+      WITH LatestAudit AS (
+        SELECT alert.alert_id,
+               aud.audit_internal_id,
+               ROW_NUMBER() OVER (
+                 PARTITION BY alert.alert_id
+                 ORDER BY aud.create_date DESC
+               ) AS rn
+        FROM   LC_RCM_INC.ACM_AUDITS aud
+        JOIN   LC_RCM_INC.ACM_ALERT_AUDITS alertaud
+               ON alertaud.audit_internal_id = aud.audit_internal_id
+        JOIN   LC_RCM_INC.ALERTS alert
+               ON alert.alert_internal_id = alertaud.alert_internal_id
+        WHERE  aud.event LIKE '%created'
+            OR aud.event LIKE '%updated'
+      )
+      ...
+      JOIN LatestAudit la
+        ON la.alert_id = a.alert_id
+       AND la.rn = 1
+
+That replaces N scalar queries with a single analytic query.
+
+5. Very wide SELECT list with many NVL/TO_CHAR
+The middle of snippets 2 & 3 is a long list like:
+SELECT NVL(a.p1, '')  AS "a.p1",
+       NVL(a.p2, '')  AS "a.p2",
+       ...
+       NVL(TO_CHAR(ac.cd12,'yyyy/mm/dd HH24:mi:ss'),'') AS "ac.cd12",
+       ...
+This is mostly cosmetic / formatting and not the main performance problem, but:
+- Repeated NVL(TO_CHAR(...)) on the same date columns is extra CPU.
+- If the same expression is used several times, compute it once (subquery or CTE) and reuse.
+Not a priority compared to the CTE and scalar-subquery issues, but something to be aware of.
+
+6. Final WHERE and joins
+Bottom of the query:
+...
+LEFT JOIN LC_SCMT.WORK_ITEM_ATTRIBUTES WIT ON WIT.WORK_ITEM_ID = a.alert_id
+LEFT JOIN REGION LR             ON LR.work_item_id    = a.alert_id
+LEFT JOIN PredicateOffences PR  ON PR.work_item_id    = a.alert_id
+LEFT JOIN Passports P           ON P.work_item_id     = a.alert_id
+LEFT JOIN OWN_ENT ON OWN_ENT.alert_id = a.alert_id
+WHERE a.alert_type_id = 3
+  AND a.alert_id      = :alert_id;
+
+For a single-alert drilldown, this is fine if the optimizer can push the a.alert_id filter inside the CTEs. But because those CTEs aggregate over all rows without referencing a, Oracle may or may not fully push the predicate. 
+That’s why I’d strongly prefer correlated aggregates or CTEs that explicitly join to ALERTS with a.alert_id inside them.
+
+Overall verdict
+Is the query “good”? Functionally yes; performance-wise it’s heavy and can be significantly improved.
+
+Main inefficiencies:
+1. Multiple CTEs scanning the same large table and doing LISTAGG aggregations independently.
+2. CTEs that aggregate all rows, even when only a small subset of alerts is needed.
+3. DISTINCT, UNION (rather than UNION ALL), and correlated scalar subqueries that force repeated sorts.
+4. No explicit push of the alert filter into those CTEs.
+
+Biggest wins if you refactor:
+
+- Merge CTEs on the same base table and/or turn them into correlated aggregates that filter by a.alert_id.
+- Replace the correlated “latest audit” subquery with a single analytic query (ROW_NUMBER).
+- Remove unnecessary DISTINCT / UNION, or change to UNION ALL.
+- Ensure proper indexing on:
+    - WORK_ITEM_MULT_VAL_ATTRIBUTES (WORK_ITEM_ID, ATTRIBUTE_TYPE, ATTRIBUTE_VALUE)
+    - MT_OWNING_UBS_ENTITIES (ALERT_ID)
+    - All the foreign-key IDs used in joins (ALERTS, audit tables, MD_* tables).
