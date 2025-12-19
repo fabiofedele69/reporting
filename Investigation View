@@ -58,3 +58,39 @@ CROSS APPLY (
     WHERE rn = 1
 ) f
 WHERE a.alert_type_id = 3;
+
+
+CREATE OR REPLACE VIEW vw_alert_latest_four_six_eye AS
+SELECT
+    alert_id,
+    eye_check_type,
+    trans_date,
+    comments
+FROM (
+    SELECT
+        a.alert_id,
+        CASE
+            WHEN aud.note LIKE '%Four Eye%' THEN 'FOUR_EYE'
+            WHEN aud.note LIKE '%Six Eye%'  THEN 'SIX_EYE'
+        END AS eye_check_type,
+        aud.create_date AS trans_date,
+        aud.comments,
+        ROW_NUMBER() OVER (
+            PARTITION BY
+                a.alert_id,
+                CASE
+                    WHEN aud.note LIKE '%Four Eye%' THEN 'FOUR_EYE'
+                    WHEN aud.note LIKE '%Six Eye%'  THEN 'SIX_EYE'
+                END
+            ORDER BY aud.create_date DESC
+        ) rn
+    FROM lc_rcm_inc.alerts a
+    JOIN lc_rcm_inc.acm_audits aud
+        ON aud.alert_internal_id = a.alert_internal_id
+    WHERE aud.comments IS NOT NULL
+      AND (
+            aud.note LIKE '%Four Eye%'
+         OR aud.note LIKE '%Six Eye%'
+      )
+)
+WHERE rn = 1;
