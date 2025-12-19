@@ -85,8 +85,10 @@ FROM (
             ORDER BY aud.create_date DESC
         ) rn
     FROM lc_rcm_inc.alerts a
+    JOIN lc_rcm_inc.acm_alert_audits aa
+        ON aa.alert_internal_id = a.alert_internal_id
     JOIN lc_rcm_inc.acm_audits aud
-        ON aud.alert_internal_id = a.alert_internal_id
+        ON aud.audit_internal_id = aa.audit_internal_id
     WHERE aud.comments IS NOT NULL
       AND (
             aud.note LIKE '%Four Eye%'
@@ -94,3 +96,4 @@ FROM (
       )
 )
 WHERE rn = 1;
+
