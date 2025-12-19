@@ -27,3 +27,34 @@ CROSS APPLY (
     WHERE rn = 1
 ) f
 WHERE a.alert_type_id = 3;
+
+
+CREATE OR REPLACE VIEW vw_case_latest_four_eye AS
+SELECT
+    a.caseid,
+    a.alert_type_id,
+    f.trans_date,
+    f.action_performer,
+    f.action_desc
+FROM lc_rcm_inc.alerts a
+CROSS APPLY (
+    SELECT
+        trans_date,
+        action_performer,
+        action_desc
+    FROM (
+        SELECT
+            t.trans_date,
+            t.action_performer,
+            t.action_desc,
+            ROW_NUMBER() OVER (
+                ORDER BY t.trans_date DESC
+            ) rn
+        FROM TABLE(
+            lc_scmt.fn_fcscmt_invest_prog_raw(a.caseid)
+        ) t
+        WHERE t.action_desc = 'Case Four Eye Check Performed'
+    )
+    WHERE rn = 1
+) f
+WHERE a.alert_type_id = 3;
