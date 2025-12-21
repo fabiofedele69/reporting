@@ -1,0 +1,135 @@
+1️⃣ Base View You Need
+
+All queries use:
+
+V$SESSION
+V$SESSION_WAIT / V$SESSION_EVENT
+V$EVENT_NAME
+
+You need SELECT_CATALOG_ROLE or DBA.
+
+2️⃣ Active Sessions (ON CPU)
+SELECT
+    s.sid,
+    s.serial#,
+    s.username,
+    s.status,
+    s.sql_id,
+    s.program,
+    s.machine
+FROM v$session s
+WHERE s.status = 'ACTIVE'
+  AND s.state = 'ON CPU';
+
+Meaning
+- Session is executing SQL
+- Using CPU
+- Counts as Active Session
+
+3️⃣ Waiting – NON-IDLE (Active Wait)
+SELECT
+    s.sid,
+    s.serial#,
+    s.username,
+    s.sql_id,
+    s.event,
+    s.wait_class,
+    s.seconds_in_wait
+FROM v$session s
+WHERE s.status = 'ACTIVE'
+  AND s.state = 'WAITING'
+  AND s.wait_class <> 'Idle';
+
+Meaning
+- Session is blocked on DB resource
+- Still counts as Active Session
+
+4️⃣ Waiting – IDLE (Not Active)
+SELECT
+    s.sid,
+    s.serial#,
+    s.username,
+    s.sql_id,
+    s.event,
+    s.wait_class,
+    s.seconds_in_wait
+FROM v$session s
+WHERE s.state = 'WAITING'
+  AND s.wait_class = 'Idle';
+
+Meaning
+- Connected, doing nothing
+- Does NOT count as active workload
+
+5️⃣ Combined View (Most Useful)
+This gives you everything in one query with clear classification:
+
+SELECT
+    s.sid,
+    s.serial#,
+    s.username,
+    s.sql_id,
+    s.state,
+    s.wait_class,
+    s.event,
+    CASE
+        WHEN s.state = 'ON CPU' THEN 'ON_CPU'
+        WHEN s.state = 'WAITING' AND s.wait_class <> 'Idle' THEN 'WAIT_NON_IDLE'
+        WHEN s.state = 'WAITING' AND s.wait_class = 'Idle' THEN 'WAIT_IDLE'
+    END AS session_type
+FROM v$session s
+WHERE s.type = 'USER'
+ORDER BY session_type, s.sid;
+
+6️⃣ Aggregated View (Perfect for Graphs)
+This query is ideal if you want counts per category:
+
+SELECT
+    CASE
+        WHEN s.state = 'ON CPU' THEN 'ON_CPU'
+        WHEN s.state = 'WAITING' AND s.wait_class <> 'Idle' THEN 'WAIT_NON_IDLE'
+        WHEN s.state = 'WAITING' AND s.wait_class = 'Idle' THEN 'WAIT_IDLE'
+    END AS session_type,
+    COUNT(*) AS session_count
+FROM v$session s
+WHERE s.type = 'USER'
+GROUP BY
+    CASE
+        WHEN s.state = 'ON CPU' THEN 'ON_CPU'
+        WHEN s.state = 'WAITING' AND s.wait_class <> 'Idle' THEN 'WAIT_NON_IDLE'
+        WHEN s.state = 'WAITING' AND s.wait_class = 'Idle' THEN 'WAIT_IDLE'
+    END;
+
+7️⃣ Historical Version (ASH – Last 10 Minutes)
+If you want historical SQL_IDs (not just current):
+
+SELECT
+    sql_id,
+    session_state,
+    wait_class,
+    COUNT(*) samples
+FROM v$active_session_history
+WHERE sample_time > SYSDATE - (10/1440)
+GROUP BY sql_id, session_state, wait_class
+ORDER BY samples DESC;
+
+Interpretation
+- SESSION_STATE = 'ON CPU'
+- SESSION_STATE = 'WAITING'
+- WAIT_CLASS = 'Idle' → idle
+
+8️⃣ Blocking Sessions (Bonus)
+SELECT
+    s.sid,
+    s.serial#,
+    s.sql_id,
+    s.blocking_session,
+    s.event,
+    s.wait_class
+FROM v$session s
+WHERE s.blocking_session IS NOT NULL;
+
+9️⃣ DBA Golden Rule (Remember This)
+Performance analysis = ON CPU + WAIT NON-IDLE
+WAIT IDLE = ignore for tuning
+
