@@ -133,3 +133,107 @@ WHERE s.blocking_session IS NOT NULL;
 Performance analysis = ON CPU + WAIT NON-IDLE
 WAIT IDLE = ignore for tuning
 
+How to Get the SQL Statement from a SQL_ID (Oracle 19c)
+From Memory (Best / Real-Time)
+Use V$SQL (SQL still in shared pool)
+
+SELECT
+    sql_id,
+    child_number,
+    sql_text
+FROM v$sql
+WHERE sql_id = '<SQL_ID>';
+
+Notes
+- Returns current SQL text
+- Multiple rows = multiple child cursors
+- Fastest and most accurate
+⚠️ If no rows → SQL aged out of memory
+
+Full SQL Text (Long Statements)
+V$SQL.SQL_TEXT is truncated.
+To get the complete SQL:
+
+SELECT
+    sql_id,
+    DBMS_LOB.SUBSTR(sql_fulltext, 4000, 1) AS sql_text
+FROM v$sql
+WHERE sql_id = '<SQL_ID>';
+
+For >4000 chars, extract in chunks.
+
+From Active Sessions (If Still Running)
+SELECT
+    s.sid,
+    s.serial#,
+    s.sql_id,
+    q.sql_text
+FROM v$session s
+JOIN v$sql q ON s.sql_id = q.sql_id
+WHERE s.sql_id = '<SQL_ID>';
+
+From AWR (Historical – Most Reliable)
+Use DBA_HIST_SQLTEXT
+
+SELECT
+    sql_id,
+    DBMS_LOB.SUBSTR(sql_text, 4000, 1) AS sql_text
+FROM dba_hist_sqltext
+WHERE sql_id = '<SQL_ID>';
+
+Notes
+- Requires Diagnostics Pack
+- SQL must have appeared in AWR snapshot
+- Works even if SQL aged out of memory
+
+From ASH (Correlating to Execution Time)
+SELECT DISTINCT
+    ash.sql_id,
+    DBMS_LOB.SUBSTR(txt.sql_text, 4000, 1) AS sql_text
+FROM v$active_session_history ash
+JOIN dba_hist_sqltext txt ON ash.sql_id = txt.sql_id
+WHERE ash.sql_id = '<SQL_ID>';
+
+Using TOAD (GUI Way – Quick)
+If you are in TOAD:
+Paste SQL_ID
+Open:
+Database → Monitor → Sessions
+Right-click session → View SQL
+Or:
+Database → Diagnose → AWR → Top SQL
+→ Double-click SQL_ID
+TOAD internally queries V$SQL or DBA_HIST_SQLTEXT.
+
+Edge Cases You Should Know
+SQL_ID Exists but No SQL Text
+
+Possible reasons:
+SQL aged out of shared pool
+SQL not captured in AWR
+Privilege issue
+Multiple SQL Texts for Same SQL_ID?
+
+❌ Impossible
+SQL_ID is a hash of SQL text.
+
+One-Query “Try Everything” (Recommended)
+SELECT
+    sql_id,
+    DBMS_LOB.SUBSTR(sql_fulltext, 4000, 1) AS sql_text,
+    'V$SQL' AS source
+FROM v$sql
+WHERE sql_id = '<SQL_ID>'
+
+UNION ALL
+
+SELECT
+    sql_id,
+    DBMS_LOB.SUBSTR(sql_text, 4000, 1),
+    'AWR'
+FROM dba_hist_sqltext
+WHERE sql_id = '<SQL_ID>';
+
+DBA Rule to Remember
+If the SQL is still running → V$SQL
+If it ran in the past → AWR
