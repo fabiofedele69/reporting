@@ -237,3 +237,193 @@ WHERE sql_id = '<SQL_ID>';
 DBA Rule to Remember
 If the SQL is still running → V$SQL
 If it ran in the past → AWR
+
+
+*********************************************************
+
+Below are production-safe SQL queries you can run on Oracle 19c to get session counts per owner (schema/user) split by:
+
+ON CPU
+WAIT (non-idle) → active wait
+WAIT (idle)
+
+Core Dashboard Query (Per Owner / Per State)
+
+SELECT
+    NVL(s.username, 'BACKGROUND') AS owner,
+    SUM(CASE
+            WHEN s.state = 'ON CPU'
+            THEN 1
+            ELSE 0
+        END) AS on_cpu,
+    SUM(CASE
+            WHEN s.state = 'WAITING'
+             AND s.wait_class <> 'Idle'
+            THEN 1
+            ELSE 0
+        END) AS wait_non_idle,
+    SUM(CASE
+            WHEN s.state = 'WAITING'
+             AND s.wait_class = 'Idle'
+            THEN 1
+            ELSE 0
+        END) AS wait_idle,
+    COUNT(*) AS total_sessions
+FROM v$session s
+WHERE s.type = 'USER'
+GROUP BY s.username
+ORDER BY total_sessions DESC;
+
+For each owner (schema / user) you get:
+
+Column	         Meaning
+ON_CPU	         Sessions actively consuming CPU
+WAIT_NON_IDLE	 Sessions blocked by DB resources
+WAIT_IDLE	     Sessions idle / client wait
+TOTAL_SESSIONS	 All user sessions
+
+✅ Uses Oracle’s exact session state logic
+✅ Matches AWR / ASH definitions
+✅ Ideal for TOAD grids or charts
+
+Example Interpretation
+OWNER	     ON_CPU	WAIT_NON_IDLE	WAIT_IDLE
+APP_USER	 12	          8               150
+BATCH	      5	         30                 0
+REPORT	      1	          0                40
+
+
+Variant: Only “Active Sessions” (Ignore Idle Completely)
+If you want only performance-relevant sessions:
+
+SELECT
+    s.username AS owner,
+    SUM(CASE
+            WHEN s.state = 'ON CPU' THEN 1
+            ELSE 0
+        END) AS on_cpu,
+    SUM(CASE
+            WHEN s.state = 'WAITING'
+             AND s.wait_class <> 'Idle'
+            THEN 1
+            ELSE 0
+        END) AS wait_non_idle,
+    COUNT(*) AS active_sessions
+FROM v$session s
+WHERE s.type = 'USER'
+  AND ( s.state = 'ON CPU'
+     OR (s.state = 'WAITING' AND s.wait_class <> 'Idle') )
+GROUP BY s.username
+ORDER BY active_sessions DESC;
+
+👉 This aligns with Average Active Sessions (AAS) logic.
+
+⏱ Time-Series Version (For Graphing)
+If you want historical counts by owner (ASH, last 15 minutes):
+
+SELECT
+    ash.username AS owner,
+    ash.session_state,
+    ash.wait_class,
+    COUNT(*) AS samples
+FROM v$active_session_history ash
+WHERE ash.sample_time > SYSDATE - (15/1440)
+GROUP BY ash.username, ash.session_state, ash.wait_class
+ORDER BY samples DESC;
+
+Interpretation
+Each sample ≈ 1 second
+Samples ≈ session-seconds
+
+📌 Important Notes (Read This)
+✔ Correctness
+
+Idle sessions are separated (not counted as active)
+Non-idle waits are true performance waits
+ON CPU + WAIT_NON_IDLE = real load
+
+⚠ Common Pitfalls
+
+Do not sum idle sessions when sizing CPU
+High WAIT_IDLE = connection pooling issue, not DB issue
+High WAIT_NON_IDLE = tuning / contention issue
+
+
+*******************************************************
+
+What You Can Build (Correct Historical Dashboard)
+
+You can build a historical dashboard per owner for:
+
+ON CPU
+WAIT non-idle
+(using ASH)
+
+And combine it with:
+Current WAIT idle (from V$SESSION)
+This is how DBAs do it in real life.
+
+✅ Historical Dashboard (ASH – Past Sessions)
+
+This gives you per owner, per state, over a time window.
+🔹 Last 30 Minutes – Per Owner
+
+SELECT
+    NVL(username, 'UNKNOWN') AS owner,
+    SUM(CASE
+            WHEN session_state = 'ON CPU'
+            THEN 1
+            ELSE 0
+        END) AS on_cpu_samples,
+    SUM(CASE
+            WHEN session_state = 'WAITING'
+             AND wait_class <> 'Idle'
+            THEN 1
+            ELSE 0
+        END) AS wait_non_idle_samples,
+    COUNT(*) AS total_active_samples
+FROM v$active_session_history
+WHERE sample_time > SYSDATE - (30/1440)
+GROUP BY username
+ORDER BY total_active_samples DESC;
+
+Interpretation
+
+Each sample ≈ 1 second
+on_cpu_samples ≈ CPU seconds
+wait_non_idle_samples ≈ wait seconds
+This is exactly how AAS is calculated
+
+
+🔁 AWR Version (Older History)
+If ASH retention is short, use AWR:
+
+SELECT
+    ash.username AS owner,
+    SUM(CASE
+            WHEN ash.session_state = 'ON CPU'
+            THEN 1
+            ELSE 0
+        END) AS on_cpu_samples,
+    SUM(CASE
+            WHEN ash.session_state = 'WAITING'
+             AND ash.wait_class <> 'Idle'
+            THEN 1
+            ELSE 0
+        END) AS wait_non_idle_samples,
+    COUNT(*) AS total_active_samples
+FROM dba_hist_active_sess_history ash
+WHERE ash.sample_time BETWEEN
+      TO_DATE('&begin_time','YYYY-MM-DD HH24:MI')
+  AND TO_DATE('&end_time','YYYY-MM-DD HH24:MI')
+GROUP BY ash.username
+ORDER BY total_active_samples DESC;
+
+❌ Why WAIT IDLE Cannot Be Historical
+
+Idle sessions:
+Are not performance-relevant
+Can be thousands (connection pools)
+Would explode AWR size
+So Oracle never stores them historically.
+If you see a tool claiming otherwise → it is lying or approximating.
