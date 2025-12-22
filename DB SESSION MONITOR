@@ -581,4 +581,85 @@ FROM v$session s
 WHERE s.type = 'USER'
 GROUP BY s.username;
 
+************************************************
+
+CREATE OR REPLACE VIEW lc_scmt.session_dashboard_v AS
+SELECT
+    s.username AS owner,
+
+    /* Explicit session categories */
+    SUM(CASE
+            WHEN s.status = 'KILLED'
+            THEN 1 ELSE 0
+        END) AS killed,
+
+    SUM(CASE
+            WHEN s.state = 'ON CPU'
+            THEN 1 ELSE 0
+        END) AS on_cpu,
+
+    SUM(CASE
+            WHEN s.state = 'WAITING'
+             AND s.wait_class <> 'Idle'
+            THEN 1 ELSE 0
+        END) AS wait_non_idle,
+
+    SUM(CASE
+            WHEN s.state = 'WAITING'
+             AND s.wait_class = 'Idle'
+            THEN 1 ELSE 0
+        END) AS wait_idle,
+
+    /* Everything else (WAITED SHORT TIME, transitions, etc.) */
+    SUM(CASE
+            WHEN s.state NOT IN ('ON CPU', 'WAITING')
+            THEN 1
+            ELSE 0
+        END) AS other_sessions,
+
+    /* Guaranteed to match sum of all above */
+    COUNT(*) AS total_sessions,
+
+    /* Critical SQL_ID */
+    (
+        SELECT sql_id
+        FROM (
+            SELECT
+                s2.sql_id,
+                COUNT(*) AS active_cnt
+            FROM v$session s2
+            WHERE s2.username = s.username
+              AND s2.sql_id IS NOT NULL
+              AND (
+                    s2.state = 'ON CPU'
+                 OR (s2.state = 'WAITING' AND s2.wait_class <> 'Idle')
+                  )
+            GROUP BY s2.sql_id
+            ORDER BY active_cnt DESC
+        )
+        WHERE ROWNUM = 1
+    ) AS critical_sql_id,
+
+    /* Active sessions for that SQL */
+    (
+        SELECT MAX(active_cnt)
+        FROM (
+            SELECT
+                COUNT(*) AS active_cnt
+            FROM v$session s3
+            WHERE s3.username = s.username
+              AND s3.sql_id IS NOT NULL
+              AND (
+                    s3.state = 'ON CPU'
+                 OR (s3.state = 'WAITING' AND s3.wait_class <> 'Idle')
+                  )
+            GROUP BY s3.sql_id
+        )
+    ) AS critical_sql_active_sessions
+
+FROM v$session s
+WHERE s.type = 'USER'
+GROUP BY s.username;
+
+
 
