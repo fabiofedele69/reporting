@@ -427,3 +427,85 @@ Can be thousands (connection pools)
 Would explode AWR size
 So Oracle never stores them historically.
 If you see a tool claiming otherwise → it is lying or approximating.
+
+
+DASHBOARD
+
+WITH session_classification AS (
+    SELECT
+        s.username                            AS owner,
+        s.sql_id,
+        CASE
+            WHEN s.state = 'ON CPU'
+                THEN 'ON_CPU'
+            WHEN s.state = 'WAITING'
+             AND s.wait_class <> 'Idle'
+                THEN 'WAIT_NON_IDLE'
+            WHEN s.state = 'WAITING'
+             AND s.wait_class = 'Idle'
+                THEN 'WAIT_IDLE'
+            WHEN s.status = 'KILLED'
+                THEN 'KILLED'
+            ELSE 'OTHER'
+        END AS session_type
+    FROM v$session s
+    WHERE s.type = 'USER'
+),
+aggregated AS (
+    SELECT
+        owner,
+        session_type,
+        COUNT(*) AS cnt
+    FROM session_classification
+    GROUP BY owner, session_type
+),
+sql_pressure AS (
+    SELECT
+        owner,
+        sql_id,
+        COUNT(*) AS active_sessions
+    FROM session_classification
+    WHERE session_type IN ('ON_CPU', 'WAIT_NON_IDLE')
+      AND sql_id IS NOT NULL
+    GROUP BY owner, sql_id
+),
+critical_sql AS (
+    SELECT
+        owner,
+        sql_id,
+        active_sessions,
+        ROW_NUMBER() OVER (
+            PARTITION BY owner
+            ORDER BY active_sessions DESC
+        ) AS rn
+    FROM sql_pressure
+)
+SELECT
+    a.owner,
+
+    -- Session state counts
+    SUM(CASE WHEN a.session_type = 'ON_CPU' THEN a.cnt ELSE 0 END)        AS on_cpu,
+    SUM(CASE WHEN a.session_type = 'WAIT_NON_IDLE' THEN a.cnt ELSE 0 END) AS wait_non_idle,
+    SUM(CASE WHEN a.session_type = 'WAIT_IDLE' THEN a.cnt ELSE 0 END)     AS wait_idle,
+    SUM(CASE WHEN a.session_type = 'KILLED' THEN a.cnt ELSE 0 END)        AS killed,
+
+    -- Total sessions
+    SUM(a.cnt) AS total_sessions,
+
+    -- Critical SQL
+    c.sql_id               AS critical_sql_id,
+    c.active_sessions      AS critical_sql_active_sessions
+
+FROM aggregated a
+LEFT JOIN critical_sql c
+    ON a.owner = c.owner
+   AND c.rn = 1
+GROUP BY
+    a.owner,
+    c.sql_id,
+    c.active_sessions
+ORDER BY
+    (SUM(CASE
+        WHEN a.session_type IN ('ON_CPU','WAIT_NON_IDLE')
+        THEN a.cnt ELSE 0 END)) DESC;
+
