@@ -818,5 +818,115 @@ FROM (
 )
 GROUP BY owner;
 
+****************************************************************************
+
+CREATE OR REPLACE VIEW lc_scmt.session_dashboard_v AS
+SELECT
+    owner,
+
+    /* Mutually exclusive session counts */
+    SUM(CASE WHEN session_class = 'KILLED'        THEN 1 ELSE 0 END) AS killed,
+    SUM(CASE WHEN session_class = 'ON_CPU'        THEN 1 ELSE 0 END) AS on_cpu,
+    SUM(CASE WHEN session_class = 'WAIT_NON_IDLE' THEN 1 ELSE 0 END) AS wait_non_idle,
+    SUM(CASE WHEN session_class = 'WAIT_IDLE'     THEN 1 ELSE 0 END) AS wait_idle,
+    SUM(CASE WHEN session_class = 'OTHER'         THEN 1 ELSE 0 END) AS other_sessions,
+
+    COUNT(*) AS total_sessions,
+
+    /* TOP 5 critical SQL_IDs with active count, wait class, blocked count */
+    (
+        SELECT LISTAGG(
+                   sql_id || '[' ||
+                   active_cnt || '|' ||
+                   NVL(
+                       CASE
+                           WHEN wait_class = 'Other' THEN 'Internal'
+                           ELSE wait_class
+                       END,
+                       'CPU'
+                   ) || '|' ||
+                   blocked_cnt || ']',
+                   ', '
+               ) WITHIN GROUP (ORDER BY active_cnt DESC)
+        FROM (
+            SELECT *
+            FROM (
+                SELECT
+                    s2.sql_id,
+
+                    /* Active pressure */
+                    COUNT(*) AS active_cnt,
+
+                    /* Dominant non-idle wait class */
+                    MAX(wc.wait_class) KEEP (
+                        DENSE_RANK FIRST ORDER BY wc.wc_cnt DESC
+                    ) AS wait_class,
+
+                    /* Blocked sessions */
+                    SUM(
+                        CASE
+                            WHEN s2.blocking_session IS NOT NULL
+                            THEN 1 ELSE 0
+                        END
+                    ) AS blocked_cnt
+
+                FROM (
+                    SELECT
+                        username AS owner,
+                        sql_id,
+                        blocking_session,
+                        CASE
+                            WHEN status = 'KILLED'
+                                THEN 'KILLED'
+                            WHEN state = 'ON CPU'
+                                THEN 'ON_CPU'
+                            WHEN state = 'WAITING'
+                             AND wait_class <> 'Idle'
+                                THEN 'WAIT_NON_IDLE'
+                            WHEN state = 'WAITING'
+                             AND wait_class = 'Idle'
+                                THEN 'WAIT_IDLE'
+                            ELSE 'OTHER'
+                        END AS session_class
+                    FROM v$session
+                    WHERE type = 'USER'
+                ) s2
+                LEFT JOIN (
+                    SELECT
+                        sql_id,
+                        wait_class,
+                        COUNT(*) AS wc_cnt
+                    FROM v$session
+                    WHERE state = 'WAITING'
+                      AND wait_class <> 'Idle'
+                    GROUP BY sql_id, wait_class
+                ) wc
+                  ON wc.sql_id = s2.sql_id
+                WHERE s2.owner = owner
+                  AND s2.sql_id IS NOT NULL
+                  AND s2.session_class IN ('ON_CPU','WAIT_NON_IDLE')
+                GROUP BY s2.sql_id
+                ORDER BY active_cnt DESC
+            )
+            WHERE ROWNUM <= 5
+        )
+    ) AS critical_sql_top5
+
+FROM (
+    SELECT
+        username AS owner,
+        CASE
+            WHEN status = 'KILLED'
+                THEN 'KILLED'
+            WHEN state = 'ON CPU'
+                THEN 'ON_CPU'
+            WHEN state = 'WAITING'
+             AND wait_class <> 'Idle'
+                THEN 'WAIT_NON_IDLE'
+            WHEN state = 'WAITING'
+             AND wait_class = 'Idle'
+                THEN 'WAIT_IDLE'
+            ELSE 'O
+
 
 
