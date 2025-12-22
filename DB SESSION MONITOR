@@ -513,51 +513,72 @@ ORDER BY
 
 CREATE OR REPLACE VIEW lc_scmt.session_dashboard_v AS
 SELECT
-    owner,
+    s.username AS owner,
 
-    SUM(CASE WHEN session_type = 'ON_CPU' THEN 1 ELSE 0 END)        AS on_cpu,
-    SUM(CASE WHEN session_type = 'WAIT_NON_IDLE' THEN 1 ELSE 0 END) AS wait_non_idle,
-    SUM(CASE WHEN session_type = 'WAIT_IDLE' THEN 1 ELSE 0 END)     AS wait_idle,
-    SUM(CASE WHEN session_type = 'KILLED' THEN 1 ELSE 0 END)        AS killed,
+    /* Session state counts */
+    SUM(CASE
+            WHEN s.status = 'KILLED'
+            THEN 1 ELSE 0
+        END) AS killed,
+
+    SUM(CASE
+            WHEN s.state = 'ON CPU'
+            THEN 1 ELSE 0
+        END) AS on_cpu,
+
+    SUM(CASE
+            WHEN s.state = 'WAITING'
+             AND s.wait_class <> 'Idle'
+            THEN 1 ELSE 0
+        END) AS wait_non_idle,
+
+    SUM(CASE
+            WHEN s.state = 'WAITING'
+             AND s.wait_class = 'Idle'
+            THEN 1 ELSE 0
+        END) AS wait_idle,
 
     COUNT(*) AS total_sessions,
 
-    MAX(CASE WHEN rn = 1 THEN sql_id END)          AS critical_sql_id,
-    MAX(CASE WHEN rn = 1 THEN active_sessions END) AS critical_sql_active_sessions
+    /* Critical SQL_ID per owner */
+    (
+        SELECT sql_id
+        FROM (
+            SELECT
+                s2.sql_id,
+                COUNT(*) AS active_cnt
+            FROM v$session s2
+            WHERE s2.username = s.username
+              AND s2.sql_id IS NOT NULL
+              AND (
+                    s2.state = 'ON CPU'
+                 OR (s2.state = 'WAITING' AND s2.wait_class <> 'Idle')
+                  )
+            GROUP BY s2.sql_id
+            ORDER BY active_cnt DESC
+        )
+        WHERE ROWNUM = 1
+    ) AS critical_sql_id,
 
-FROM (
-    SELECT
-        s.username AS owner,
-        s.sql_id,
+    /* How many active sessions that SQL has */
+    (
+        SELECT MAX(active_cnt)
+        FROM (
+            SELECT
+                COUNT(*) AS active_cnt
+            FROM v$session s3
+            WHERE s3.username = s.username
+              AND s3.sql_id IS NOT NULL
+              AND (
+                    s3.state = 'ON CPU'
+                 OR (s3.state = 'WAITING' AND s3.wait_class <> 'Idle')
+                  )
+            GROUP BY s3.sql_id
+        )
+    ) AS critical_sql_active_sessions
 
-        CASE
-            WHEN s.status = 'KILLED'
-                THEN 'KILLED'
-            WHEN s.state = 'ON CPU'
-                THEN 'ON_CPU'
-            WHEN s.state = 'WAITING'
-             AND s.wait_class <> 'Idle'
-                THEN 'WAIT_NON_IDLE'
-            WHEN s.state = 'WAITING'
-             AND s.wait_class = 'Idle'
-                THEN 'WAIT_IDLE'
-            ELSE 'OTHER'
-        END AS session_type,
+FROM v$session s
+WHERE s.type = 'USER'
+GROUP BY s.username;
 
-        COUNT(*) OVER (
-            PARTITION BY s.username, s.sql_id
-        ) AS active_sessions,
-
-        ROW_NUMBER() OVER (
-            PARTITION BY s.username
-            ORDER BY
-                COUNT(*) OVER (
-                    PARTITION BY s.username, s.sql_id
-                ) DESC NULLS LAST
-        ) AS rn
-
-    FROM v$session s
-    WHERE s.type = 'USER'
-)
-GROUP BY owner;
 
