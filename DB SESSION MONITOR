@@ -661,5 +661,64 @@ FROM v$session s
 WHERE s.type = 'USER'
 GROUP BY s.username;
 
+-----------------------------------------------
+
+CREATE OR REPLACE VIEW lc_scmt.session_dashboard_v AS
+SELECT
+    s.username AS owner,
+
+    /* Session categories */
+    SUM(CASE WHEN s.status = 'KILLED' THEN 1 ELSE 0 END) AS killed,
+
+    SUM(CASE WHEN s.state = 'ON CPU' THEN 1 ELSE 0 END) AS on_cpu,
+
+    SUM(CASE
+            WHEN s.state = 'WAITING'
+             AND s.wait_class <> 'Idle'
+            THEN 1 ELSE 0
+        END) AS wait_non_idle,
+
+    SUM(CASE
+            WHEN s.state = 'WAITING'
+             AND s.wait_class = 'Idle'
+            THEN 1 ELSE 0
+        END) AS wait_idle,
+
+    SUM(CASE
+            WHEN s.state NOT IN ('ON CPU', 'WAITING')
+            THEN 1 ELSE 0
+        END) AS other_sessions,
+
+    COUNT(*) AS total_sessions,
+
+    /* Top 3 critical SQL_IDs */
+    (
+        SELECT LISTAGG(sql_id || '(' || active_cnt || ')', ', ')
+               WITHIN GROUP (ORDER BY active_cnt DESC)
+        FROM (
+            SELECT *
+            FROM (
+                SELECT
+                    s2.sql_id,
+                    COUNT(*) AS active_cnt
+                FROM v$session s2
+                WHERE s2.username = s.username
+                  AND s2.sql_id IS NOT NULL
+                  AND (
+                        s2.state = 'ON CPU'
+                     OR (s2.state = 'WAITING' AND s2.wait_class <> 'Idle')
+                      )
+                GROUP BY s2.sql_id
+                ORDER BY active_cnt DESC
+            )
+            WHERE ROWNUM <= 3
+        )
+    ) AS critical_sql_top3
+
+FROM v$session s
+WHERE s.type = 'USER'
+GROUP BY s.username;
+
+
 
 
