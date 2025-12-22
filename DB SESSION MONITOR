@@ -509,3 +509,55 @@ ORDER BY
         WHEN a.session_type IN ('ON_CPU','WAIT_NON_IDLE')
         THEN a.cnt ELSE 0 END)) DESC;
 
+*************************************************************************
+
+CREATE OR REPLACE VIEW lc_scmt.session_dashboard_v AS
+SELECT
+    owner,
+
+    SUM(CASE WHEN session_type = 'ON_CPU' THEN 1 ELSE 0 END)        AS on_cpu,
+    SUM(CASE WHEN session_type = 'WAIT_NON_IDLE' THEN 1 ELSE 0 END) AS wait_non_idle,
+    SUM(CASE WHEN session_type = 'WAIT_IDLE' THEN 1 ELSE 0 END)     AS wait_idle,
+    SUM(CASE WHEN session_type = 'KILLED' THEN 1 ELSE 0 END)        AS killed,
+
+    COUNT(*) AS total_sessions,
+
+    MAX(CASE WHEN rn = 1 THEN sql_id END)          AS critical_sql_id,
+    MAX(CASE WHEN rn = 1 THEN active_sessions END) AS critical_sql_active_sessions
+
+FROM (
+    SELECT
+        s.username AS owner,
+        s.sql_id,
+
+        CASE
+            WHEN s.status = 'KILLED'
+                THEN 'KILLED'
+            WHEN s.state = 'ON CPU'
+                THEN 'ON_CPU'
+            WHEN s.state = 'WAITING'
+             AND s.wait_class <> 'Idle'
+                THEN 'WAIT_NON_IDLE'
+            WHEN s.state = 'WAITING'
+             AND s.wait_class = 'Idle'
+                THEN 'WAIT_IDLE'
+            ELSE 'OTHER'
+        END AS session_type,
+
+        COUNT(*) OVER (
+            PARTITION BY s.username, s.sql_id
+        ) AS active_sessions,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY s.username
+            ORDER BY
+                COUNT(*) OVER (
+                    PARTITION BY s.username, s.sql_id
+                ) DESC NULLS LAST
+        ) AS rn
+
+    FROM v$session s
+    WHERE s.type = 'USER'
+)
+GROUP BY owner;
+
