@@ -926,7 +926,13 @@ FROM (
             WHEN state = 'WAITING'
              AND wait_class = 'Idle'
                 THEN 'WAIT_IDLE'
-            ELSE 'O
+            ELSE 'OTHER'
+        END AS session_class
+    FROM v$session
+    WHERE type = 'USER'
+)
+GROUP BY owner;
+
 
 
 
