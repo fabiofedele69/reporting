@@ -59,3 +59,7 @@ FROM (
     WHERE s.type = 'USER'
 )
 GROUP BY owner;
+
+SELECT *
+FROM lc_scmt.session_full_dashboard_v
+ORDER BY (on_cpu + wait_non_idle + blocked_sessions) DESC;
