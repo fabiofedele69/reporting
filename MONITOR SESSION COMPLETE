@@ -1,0 +1,61 @@
+CREATE OR REPLACE VIEW lc_scmt.session_full_dashboard_v AS
+SELECT
+    owner,
+
+    /* Core load */
+    SUM(CASE WHEN session_class = 'ON_CPU'        THEN 1 ELSE 0 END) AS on_cpu,
+    SUM(CASE WHEN session_class = 'WAIT_NON_IDLE' THEN 1 ELSE 0 END) AS wait_non_idle,
+
+    /* Blocking */
+    SUM(CASE WHEN session_class = 'BLOCKED' THEN 1 ELSE 0 END) AS blocked_sessions,
+    SUM(CASE WHEN session_class = 'BLOCKER' THEN 1 ELSE 0 END) AS blocking_sessions,
+
+    /* Non-load */
+    SUM(CASE WHEN session_class = 'WAIT_IDLE' THEN 1 ELSE 0 END) AS wait_idle,
+    SUM(CASE WHEN session_class = 'KILLED'    THEN 1 ELSE 0 END) AS killed,
+    SUM(CASE WHEN session_class = 'OTHER'     THEN 1 ELSE 0 END) AS other_sessions,
+
+    COUNT(*) AS total_sessions
+
+FROM (
+    SELECT
+        s.username AS owner,
+
+        CASE
+            WHEN s.status = 'KILLED'
+                THEN 'KILLED'
+
+            /* Blocked sessions */
+            WHEN s.blocking_session IS NOT NULL
+             AND s.state = 'WAITING'
+                THEN 'BLOCKED'
+
+            /* Blocking sessions */
+            WHEN EXISTS (
+                SELECT 1
+                FROM v$session w
+                WHERE w.blocking_session = s.sid
+            )
+                THEN 'BLOCKER'
+
+            /* Active load */
+            WHEN s.state = 'ON CPU'
+                THEN 'ON_CPU'
+
+            WHEN s.state = 'WAITING'
+             AND s.wait_class <> 'Idle'
+                THEN 'WAIT_NON_IDLE'
+
+            /* Idle */
+            WHEN s.state = 'WAITING'
+             AND s.wait_class = 'Idle'
+                THEN 'WAIT_IDLE'
+
+            /* Everything else */
+            ELSE 'OTHER'
+        END AS session_class
+
+    FROM v$session s
+    WHERE s.type = 'USER'
+)
+GROUP BY owner;
