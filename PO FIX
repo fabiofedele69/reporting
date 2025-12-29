@@ -39,9 +39,10 @@ OWN_ENT AS (
 
 
 ****************************************************************
-WITH mva AS (
+WITH mva_json AS (
     SELECT
         ATTRIB.WORK_ITEM_ID,
+
         MAX(
             CASE
                 WHEN ATTRIB.ATTRIBUTE_TYPE = 5119 THEN
@@ -63,15 +64,18 @@ WITH mva AS (
                     )
             END
         ) AS Passport
+
     FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ATTRIB
     WHERE ATTRIB.WORK_ITEM_ID = :case_id
       AND ATTRIB.ATTRIBUTE_TYPE IN (5119, 5998)
     GROUP BY ATTRIB.WORK_ITEM_ID
+),
+
+LREGION AS (
+    -- unchanged
+),
+
+OWN_ENT AS (
+    -- unchanged
 )
 
-SELECT
-    COALESCE(PredicateOffence, TO_CLOB('[]')) AS PredicateOffence,
-    COALESCE(Passport,         TO_CLOB('[]')) AS Passport
-FROM mva;
-
-CROSS JOIN Passports pa;
