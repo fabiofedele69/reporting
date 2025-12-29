@@ -39,127 +39,39 @@ OWN_ENT AS (
 
 
 ****************************************************************
-
 WITH mva AS (
     SELECT
         ATTRIB.WORK_ITEM_ID,
-        ATTRIB.ATTRIBUTE_TYPE,
-        '[' ||
-        LISTAGG(
-            '"' || ATTRIB.ATTRIBUTE_VALUE || '"',
-            ','
-        ) WITHIN GROUP (ORDER BY ATTRIB.ATTRIBUTE_VALUE)
-        || ']' AS agg_val
-    FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ATTRIB
-    WHERE ATTRIB.WORK_ITEM_ID = :case_id
-      AND ATTRIB.ATTRIBUTE_TYPE IN (5119, 5998)
-    GROUP BY
-        ATTRIB.WORK_ITEM_ID,
-        ATTRIB.ATTRIBUTE_TYPE
-),
+        MAX(
+            CASE
+                WHEN ATTRIB.ATTRIBUTE_TYPE = 5119 THEN
+                    JSON_ARRAYAGG(
+                        ATTRIB.ATTRIBUTE_VALUE
+                        ORDER BY ATTRIB.ATTRIBUTE_VALUE
+                        RETURNING CLOB
+                    )
+            END
+        ) AS PredicateOffence,
 
-PredicateOffences AS (
-    SELECT
-        agg_val AS PredicateOffence
-    FROM mva
-    WHERE ATTRIBUTE_TYPE = 5119
-),
-
-Passports AS (
-    SELECT
-        agg_val AS Passport
-    FROM mva
-    WHERE ATTRIBUTE_TYPE = 5998
-)
-
-*************************************************
-
-WITH mva AS (
-    SELECT
-        ATTRIB.WORK_ITEM_ID,
-        ATTRIB.ATTRIBUTE_TYPE,
-        ATTRIB.ATTRIBUTE_VALUE
-    FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ATTRIB
-    WHERE ATTRIB.WORK_ITEM_ID = :case_id
-      AND ATTRIB.ATTRIBUTE_TYPE IN (5119, 5998)
-),
-
-PredicateOffences AS (
-    SELECT
-        COALESCE(
-            JSON_ARRAYAGG(
-                ATTRIBUTE_VALUE
-                ORDER BY ATTRIBUTE_VALUE
-                RETURNING CLOB
-            ),
-            '[]'
-        ) AS PredicateOffence
-    FROM mva
-    WHERE ATTRIBUTE_TYPE = 5119
-),
-
-Passports AS (
-    SELECT
-        COALESCE(
-            JSON_ARRAYAGG(
-                ATTRIBUTE_VALUE
-                ORDER BY ATTRIBUTE_VALUE
-                RETURNING CLOB
-            ),
-            '[]'
+        MAX(
+            CASE
+                WHEN ATTRIB.ATTRIBUTE_TYPE = 5998 THEN
+                    JSON_ARRAYAGG(
+                        ATTRIB.ATTRIBUTE_VALUE
+                        ORDER BY ATTRIB.ATTRIBUTE_VALUE
+                        RETURNING CLOB
+                    )
+            END
         ) AS Passport
-    FROM mva
-    WHERE ATTRIBUTE_TYPE = 5998
+    FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ATTRIB
+    WHERE ATTRIB.WORK_ITEM_ID = :case_id
+      AND ATTRIB.ATTRIBUTE_TYPE IN (5119, 5998)
+    GROUP BY ATTRIB.WORK_ITEM_ID
 )
 
 SELECT
-    po.PredicateOffence,
-    pa.Passport
-FROM PredicateOffences po
-CROSS JOIN Passports pa;
+    COALESCE(PredicateOffence, TO_CLOB('[]')) AS PredicateOffence,
+    COALESCE(Passport,         TO_CLOB('[]')) AS Passport
+FROM mva;
 
-*********************************************
-
-WITH mva AS (
-    SELECT
-        ATTRIB.WORK_ITEM_ID,
-        ATTRIB.ATTRIBUTE_TYPE,
-        ATTRIB.ATTRIBUTE_VALUE
-    FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ATTRIB
-    WHERE ATTRIB.WORK_ITEM_ID = :case_id
-      AND ATTRIB.ATTRIBUTE_TYPE IN (5119, 5998)
-),
-
-PredicateOffences AS (
-    SELECT
-        COALESCE(
-            JSON_ARRAYAGG(
-                ATTRIBUTE_VALUE
-                ORDER BY ATTRIBUTE_VALUE
-                RETURNING CLOB
-            ),
-            TO_CLOB('[]')
-        ) AS PredicateOffence
-    FROM mva
-    WHERE ATTRIBUTE_TYPE = 5119
-),
-
-Passports AS (
-    SELECT
-        COALESCE(
-            JSON_ARRAYAGG(
-                ATTRIBUTE_VALUE
-                ORDER BY ATTRIBUTE_VALUE
-                RETURNING CLOB
-            ),
-            TO_CLOB('[]')
-        ) AS Passport
-    FROM mva
-    WHERE ATTRIBUTE_TYPE = 5998
-)
-
-SELECT
-    po.PredicateOffence,
-    pa.Passport
-FROM PredicateOffences po
 CROSS JOIN Passports pa;
