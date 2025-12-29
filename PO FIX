@@ -46,7 +46,7 @@ WITH mva AS (
         ATTRIB.ATTRIBUTE_TYPE,
         '[' ||
         LISTAGG(
-            '"' || REPLACE(ATTRIB.ATTRIBUTE_VALUE, '"', '\"') || '"',
+            '"' || ATTRIB.ATTRIBUTE_VALUE || '"',
             ','
         ) WITHIN GROUP (ORDER BY ATTRIB.ATTRIBUTE_VALUE)
         || ']' AS agg_val
@@ -60,22 +60,14 @@ WITH mva AS (
 
 PredicateOffences AS (
     SELECT
-        NVL(agg_val, '[]') AS PredicateOffence
+        agg_val AS PredicateOffence
     FROM mva
     WHERE ATTRIBUTE_TYPE = 5119
 ),
 
 Passports AS (
     SELECT
-        NVL(agg_val, '[]') AS Passport
+        agg_val AS Passport
     FROM mva
     WHERE ATTRIBUTE_TYPE = 5998
-),
-
-LREGION AS (
-    -- unchanged
-),
-
-OWN_ENT AS (
-    -- unchanged
 )
