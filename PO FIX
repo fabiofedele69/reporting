@@ -35,3 +35,47 @@ OWN_ENT AS (
 )
 
 -- main SELECT continues here
+
+
+
+****************************************************************
+
+WITH mva AS (
+    SELECT
+        ATTRIB.WORK_ITEM_ID,
+        ATTRIB.ATTRIBUTE_TYPE,
+        '[' ||
+        LISTAGG(
+            '"' || REPLACE(ATTRIB.ATTRIBUTE_VALUE, '"', '\"') || '"',
+            ','
+        ) WITHIN GROUP (ORDER BY ATTRIB.ATTRIBUTE_VALUE)
+        || ']' AS agg_val
+    FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ATTRIB
+    WHERE ATTRIB.WORK_ITEM_ID = :case_id
+      AND ATTRIB.ATTRIBUTE_TYPE IN (5119, 5998)
+    GROUP BY
+        ATTRIB.WORK_ITEM_ID,
+        ATTRIB.ATTRIBUTE_TYPE
+),
+
+PredicateOffences AS (
+    SELECT
+        NVL(agg_val, '[]') AS PredicateOffence
+    FROM mva
+    WHERE ATTRIBUTE_TYPE = 5119
+),
+
+Passports AS (
+    SELECT
+        NVL(agg_val, '[]') AS Passport
+    FROM mva
+    WHERE ATTRIBUTE_TYPE = 5998
+),
+
+LREGION AS (
+    -- unchanged
+),
+
+OWN_ENT AS (
+    -- unchanged
+)
