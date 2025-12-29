@@ -92,7 +92,7 @@ PredicateOffences AS (
                 ORDER BY ATTRIBUTE_VALUE
                 RETURNING CLOB
             ),
-            JSON_ARRAY()
+            '[]'
         ) AS PredicateOffence
     FROM mva
     WHERE ATTRIBUTE_TYPE = 5119
@@ -106,28 +106,14 @@ Passports AS (
                 ORDER BY ATTRIBUTE_VALUE
                 RETURNING CLOB
             ),
-            JSON_ARRAY()
+            '[]'
         ) AS Passport
     FROM mva
     WHERE ATTRIBUTE_TYPE = 5998
-),
-
-LREGION AS (
-    -- keep your existing LREGION code unchanged
-),
-
-OWN_ENT AS (
-    -- keep your existing OWN_ENT code unchanged
 )
 
--- =========================
--- MAIN SELECT
--- =========================
 SELECT
     po.PredicateOffence,
-    pa.Passport,
-    -- other columns
+    pa.Passport
 FROM PredicateOffences po
-CROSS JOIN Passports pa
--- joins to LREGION / OWN_ENT as before
-;
+CROSS JOIN Passports pa;
