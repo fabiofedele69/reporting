@@ -91,9 +91,12 @@ SELECT
     NVL(ac.cs13,'') AS "four_eye_check_performer",
     NVL(ac.cs30,'') AS "six_eye_check_performer",
 
-    lc_scmt.fn_clob_no_html(wtc.case_description) AS "wit.case_description",
-    wtc.p27 AS "logical_region",
+    lc_scmt.fn_clob_no_html(wit.case_description) AS "wit.case_description",
+    lc_scmt.fn_clob_no_html(wit.case_analysis)    AS "wit.case_analysis",
+    lc_scmt.fn_clob_no_html(wit.case_conclusion)  AS "wit.case_conclusion",
+    lc_scmt.fn_clob_no_html(wit.case_background)  AS "wit.case_background",
 
+    wtc.p27 AS "logical_region",
     NVL(REPLACE(TO_CHAR(wtc.taxonomies),'|',','),'') AS "wit.taxonomies",
     NVL(REPLACE(TO_CHAR(wtc.mros_reason_for_report),'|',','),'') AS "wit.mros_reason_for_report",
 
@@ -105,12 +108,9 @@ SELECT
     a.owner_identifier,
     NVL(TO_CHAR(a.create_date,'yyyy/mm/dd HH24:MI:SS'),'') AS "a.create_date",
 
-    lc_scmt.fn_clob_no_html(wtc.case_analysis)   AS "wit.case_analysis",
-    lc_scmt.fn_clob_no_html(wtc.case_conclusion) AS "wit.case_conclusion",
-
     NVL(aa.passport,'') AS passport
 
-FROM lc_rcm_inc_alerts a
+FROM lc_rcm_inc.alerts a
 JOIN lc_rcm_inc_acm_alert_custom_attributes ac
     ON ac.alert_custom_attributes_id = a.alert_custom_attributes_id
 JOIN lc_rcm_inc_acm_md_alert_statuses s
@@ -119,7 +119,9 @@ JOIN lc_rcm_inc_acm_md_alert_types tc
     ON a.alert_type_internal_id = tc.alert_type_internal_id
 JOIN lc_scmt.work_item_types_classes wtc
     ON a.alert_type_id = wtc.work_item_type_id
-LEFT JOIN lc_rcm_inc_acm_users usr
+LEFT JOIN lc_scmt.work_item_attributes wit
+    ON wit.work_item_id = a.alert_id
+LEFT JOIN lc_rcm_inc.acm_users usr
     ON a.owner_internal_id = usr.user_internal_id
 LEFT JOIN ATTRIB_AGG aa
     ON aa.work_item_id = a.alert_id
@@ -128,6 +130,7 @@ LEFT JOIN OWN_ENT
 WHERE a.alert_type_id = 3
   AND a.p39 = 'UBS Switzerland AG'
   AND a.deleted = 0;
+
 
 1️⃣ WORK_ITEM_MULTI_VAL_ATTRIBUTES
 Most important index — removes full scans and speeds up LISTAGG aggregation.
