@@ -1,0 +1,130 @@
+WITH ATTRIB_AGG AS (
+    SELECT
+        attrib.work_item_id,
+
+        LISTAGG(
+            CASE
+                WHEN attrib.attribute_type = 5119
+                THEN po.predicate_offence_id || '|' || po.description
+            END,
+            ';'
+        ) WITHIN GROUP (ORDER BY attrib.attribute_type) AS predicateoffence,
+
+        LISTAGG(
+            CASE
+                WHEN attrib.attribute_type = 5998
+                THEN attrib.attribute_value
+            END,
+            ';'
+        ) WITHIN GROUP (ORDER BY attrib.attribute_type) AS passport
+
+    FROM lc_scmt.work_item_multi_val_attributes attrib
+    LEFT JOIN lc_scmt.md_predicate_offence po
+        ON attrib.attribute_value = po.predicate_offence_id
+    WHERE attrib.attribute_type IN (5119, 5998)
+    GROUP BY attrib.work_item_id
+),
+
+BD AS (
+    SELECT 'Investment Bank' AS business_division, 'IB' AS business_div_code FROM dual
+    UNION ALL SELECT 'Wealth Management', 'WM' FROM dual
+    UNION ALL SELECT 'Wealth Management Americas', 'WMA' FROM dual
+    UNION ALL SELECT 'Asset Management', 'AM' FROM dual
+    UNION ALL SELECT 'Personal and Corporate', 'P&C' FROM dual
+    UNION ALL SELECT 'Wealth Management Joint Venture', 'WMJV' FROM dual
+    UNION ALL SELECT 'Corporate Branch', 'CB' FROM dual
+),
+
+OWN_ENT AS (
+    SELECT
+        oe.alert_id,
+        '{' ||
+        LISTAGG(
+              NVL(oe.business_div_code,'') || '|' ||
+              NVL(bd.business_division,'') || '|' ||
+              NVL(oe.region_code,'') || '|' ||
+              NVL(oe.country_code,'') || '|' ||
+              NVL(oe.country_val, oe.country_code) || '|' ||
+              NVL(oe.ubs_entity_code,'') || '|' ||
+              NVL(emp.sort_entity_name, oe.ubs_entity_val) || '|' ||
+              NVL(oe.line_of_business_code,'') || '|' ||
+              NVL(oe.line_of_business_val,'') || '|' ||
+              NVL(oe.is_primary,'') || '|' ||
+              NVL(oe.business_area_code,'') || '|' ||
+              NVL(oe.business_area,''),
+              ';'
+        ) WITHIN GROUP (ORDER BY oe.alert_id)
+        || '}' AS own_ent
+    FROM lc_scmt.scmt_owning_ubs_entities oe
+    JOIN BD
+        ON oe.business_div_code = bd.business_div_code
+    LEFT JOIN lc_scmt.scmt_sort_entities emp
+        ON oe.ubs_entity_code = emp.sort_entity_code
+       AND oe.country_code   = emp.sort_country
+       AND oe.region_code    = emp.sort_region
+    GROUP BY oe.alert_id
+)
+
+SELECT
+    NVL(a.p11,'') AS "a.p11",
+    NVL(a.p13,'') AS "a.p13",
+    NVL(a.p16,'') AS "a.p16",
+    NVL(a.p18,'') AS "a.p18",
+    NVL(a.p20,'') AS "a.p20",
+    NVL(a.p29,'') AS "a.p29",
+    NVL(a.p35,'') AS "a.p35",
+    NVL(a.p36,'') AS "a.p36",
+    NVL(a.p37,'') AS "a.p37",
+    NVL(a.p40,'') AS "a.p40",
+    NVL(a.p41,'') AS "a.p41",
+    NVL(a.p42,'') AS "a.p42",
+    NVL(a.p43,'') AS "a.p43",
+    NVL(a.p45,'') AS "a.p45",
+    NVL(a.p46,'') AS "a.p46",
+    NVL(a.p48,'') AS "a.p48",
+    NVL(a.score,'') AS "a.score",
+
+    NVL(ac.cs25,'No') AS "ac.cs25",
+    NVL(TO_CHAR(ac.cd19,'yyyy/mm/dd HH24:MI:SS'),'') AS "ac.cd19",
+    NVL(TO_CHAR(ac.cd22,'yyyy/mm/dd HH24:MI:SS'),'') AS "ac.cd22",
+
+    NVL(ac.cs13,'') AS "four_eye_check_performer",
+    NVL(ac.cs30,'') AS "six_eye_check_performer",
+
+    lc_scmt.fn_clob_no_html(wtc.case_description) AS "wit.case_description",
+    wtc.p27 AS "logical_region",
+
+    NVL(REPLACE(TO_CHAR(wtc.taxonomies),'|',','),'') AS "wit.taxonomies",
+    NVL(REPLACE(TO_CHAR(wtc.mros_reason_for_report),'|',','),'') AS "wit.mros_reason_for_report",
+
+    NVL(aa.predicateoffence,'') AS predicateoffences,
+    NVL(own_ent.own_ent,'')     AS own_ent,
+
+    NVL(s.status_name,'') AS "s.status_name",
+    NVL(usr.full_name,'') AS "usr.full_name",
+    a.owner_identifier,
+    NVL(TO_CHAR(a.create_date,'yyyy/mm/dd HH24:MI:SS'),'') AS "a.create_date",
+
+    lc_scmt.fn_clob_no_html(wtc.case_analysis)   AS "wit.case_analysis",
+    lc_scmt.fn_clob_no_html(wtc.case_conclusion) AS "wit.case_conclusion",
+
+    NVL(aa.passport,'') AS passport
+
+FROM lc_rcm_inc_alerts a
+JOIN lc_rcm_inc_acm_alert_custom_attributes ac
+    ON ac.alert_custom_attributes_id = a.alert_custom_attributes_id
+JOIN lc_rcm_inc_acm_md_alert_statuses s
+    ON a.status_internal_id = s.status_internal_id
+JOIN lc_rcm_inc_acm_md_alert_types tc
+    ON a.alert_type_internal_id = tc.alert_type_internal_id
+JOIN lc_scmt.work_item_types_classes wtc
+    ON a.alert_type_id = wtc.work_item_type_id
+LEFT JOIN lc_rcm_inc_acm_users usr
+    ON a.owner_internal_id = usr.user_internal_id
+LEFT JOIN ATTRIB_AGG aa
+    ON aa.work_item_id = a.alert_id
+LEFT JOIN OWN_ENT
+    ON own_ent.alert_id = a.alert_id
+WHERE a.alert_type_id = 3
+  AND a.p39 = 'UBS Switzerland AG'
+  AND a.deleted = 0;
