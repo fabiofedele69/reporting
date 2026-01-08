@@ -128,3 +128,75 @@ LEFT JOIN OWN_ENT
 WHERE a.alert_type_id = 3
   AND a.p39 = 'UBS Switzerland AG'
   AND a.deleted = 0;
+
+1️⃣ WORK_ITEM_MULTI_VAL_ATTRIBUTES
+Most important index — removes full scans and speeds up LISTAGG aggregation.
+
+CREATE INDEX wima_type_item_idx
+ON lc_scmt.work_item_multi_val_attributes (
+    attribute_type,
+    work_item_id
+);
+
+Why
+- Filtered by attribute_type IN (5119, 5998)
+- Grouped by work_item_id
+- Used only once now, but still heavy
+
+2️⃣ SCMT_OWNING_UBS_ENTITIES
+CREATE INDEX owning_alert_idx
+ON lc_scmt.scmt_owning_ubs_entities (
+    alert_id
+);
+
+Why
+- GROUP BY alert_id
+- JOIN to main query on alert_id
+
+✅ HIGHLY RECOMMENDED INDEXES
+3️⃣ SCMT_SORT_ENTITIES
+
+Improves lookup of entity names.
+CREATE INDEX sort_entities_lookup_idx
+ON lc_scmt.scmt_sort_entities (
+    sort_entity_code,
+    sort_country,
+    sort_region
+);
+
+Why
+Exact join predicates
+Prevents full table scan (204K rows in your plan)
+
+4️⃣ ALERTS (main driving table)
+Helps Oracle filter early and reduce join cost
+
+CREATE INDEX alerts_filter_idx
+ON lc_rcm_inc_alerts (
+    alert_type_id,
+    p39,
+    deleted
+);
+
+Why
+All 3 used in WHERE clause
+Highly selective filter
+Keeps ALERTS as the driving table
+
+✅ OPTIONAL / CONTEXTUAL INDEXES
+Create only if missing and needed:
+5️⃣ ACM_ALERT_CUSTOM_ATTRIBUTES
+Usually exists, but verify:
+
+CREATE INDEX alert_custom_attr_idx
+ON lc_rcm_inc_acm_alert_custom_attributes (
+    alert_custom_attributes_id
+);
+
+6️⃣ ACM_USERS
+Usually exists, but verify:
+
+CREATE INDEX users_internal_idx
+ON lc_rcm_inc_acm_users (
+    user_internal_id
+);
