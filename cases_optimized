@@ -97,8 +97,9 @@ SELECT
     lc_scmt.fn_clob_no_html(wit.case_background)  AS "wit.case_background",
 
     wtc.p27 AS "logical_region",
-    NVL(REPLACE(TO_CHAR(wtc.taxonomies),'|',','),'') AS "wit.taxonomies",
-    NVL(REPLACE(TO_CHAR(wtc.mros_reason_for_report),'|',','),'') AS "wit.mros_reason_for_report",
+
+    NVL(REPLACE(TO_CHAR(wit.taxonomies),'|',','),'') AS "wit.taxonomies",
+    NVL(REPLACE(TO_CHAR(wit.mros_reason_for_report),'|',','),'') AS "wit.mros_reason_for_report",
 
     NVL(aa.predicateoffence,'') AS predicateoffences,
     NVL(own_ent.own_ent,'')     AS own_ent,
@@ -113,9 +114,9 @@ SELECT
 FROM lc_rcm_inc.alerts a
 JOIN lc_rcm_inc_acm_alert_custom_attributes ac
     ON ac.alert_custom_attributes_id = a.alert_custom_attributes_id
-JOIN lc_rcm_inc_acm_md_alert_statuses s
+JOIN lc_rcm_inc.acm_md_alert_statuses s
     ON a.status_internal_id = s.status_internal_id
-JOIN lc_rcm_inc_acm_md_alert_types tc
+JOIN lc_rcm_inc.acm_md_alert_types tc
     ON a.alert_type_internal_id = tc.alert_type_internal_id
 JOIN lc_scmt.work_item_types_classes wtc
     ON a.alert_type_id = wtc.work_item_type_id
