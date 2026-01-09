@@ -1,0 +1,103 @@
+1️⃣ High-level verdict
+- The problem is NOT a deadlock, NOT Java, NOT a hung session.
+- The system is CPU-bound and TEMP-heavy due to large sorts / aggregations.
+- The query does run, but it runs in a way that cannot stream rows early, so Java never sees data → no file.
+
+This is classic LISTAGG-at-scale behavior.
+
+2️⃣ Top Foreground Events — what matters
+🔴 DB CPU — 98.2% of DB time
+DB CPU        263.1K sec   98.2% DB time
+
+Meaning:
+- Oracle is spending almost all time actively processing
+- Not waiting on locks
+- Not waiting on network
+- Not waiting on commits
+👉 This is a purely computational workload, not blocked.
+
+🔴 direct path read temp / write temp — CRITICAL
+direct path read temp   617.4 sec
+direct path write temp  189.9 sec
+
+Meaning:
+Oracle is spilling sort/hash data to TEMP
+This is caused by:
+LISTAGG
+GROUP BY
+hash joins on large rowsets
+👉 This confirms work areas are exceeding PGA, forcing TEMP I/O.
+
+🟠 db file scattered read / sequential read
+db file sequential read 1391.9 sec
+db file scattered read   445.6 sec
+
+Meaning:
+Large table/index scans
+Some index access
+Still expected for your data volume
+
+🟡 SQL*Net more data to client
+SQL*Net more data to client 209.5 sec
+
+This is actually good news:
+- It means some queries are returning rows
+- But likely not your big one
+- Or only returning rows after long processing
+
+3️⃣ Wait Class summary — the smoking gun
+🔴 DB CPU = 98.2%
+DB CPU: 263,065 sec
+
+Everything else is noise by comparison.
+
+👉 If this were a lock or wait issue, DB CPU would be low.
+👉 This confirms the SQL is doing huge amounts of work.
+
+🟠 User I/O = 1.5%
+TEMP + disk reads are present but not dominant — meaning:
+- The system is busy crunching
+- Not just waiting on slow disks
+
+4️⃣ I/O Profile — important detail
+🔴 Direct reads dominate buffer cache
+
+Via Buffer Cache: 128.7 blocks/sec
+Direct (blocks):  1,885.5 blocks/sec
+
+Meaning:
+Oracle is bypassing the buffer cache
+Typical for:
+  - Large scans
+  - TEMP operations
+  - Hash joins
+👉 This again points to large aggregations, not OLTP access.
+
+5️⃣ What this AWR proves conclusively
+❌ What is NOT happening
+No locking issue
+No dead session
+No Java freeze
+No commit bottleneck
+No network bottleneck
+
+✅ What IS happening
+Massive CPU usage
+Massive TEMP usage
+Large in-memory work areas overflowing
+SQL cannot return rows until work is complete
+
+This is exactly why:
+The Java process never creates the output file
+The query appears to “never finish”
+
+6️⃣ Why this SQL shape will NEVER scale in PROD
+
+Even with indexes and tuning:
+LISTAGG must:
+Read all rows
+Sort/group
+Aggregate
+Only then return rows
+👉 No early rows → no streaming → no file
+This is a fundamental execution model issue, not a tuning one.
