@@ -25,3 +25,16 @@ AND elapsed_time > 300 * 1e6          -- total elapsed > 5 minutes
 AND (elapsed_time / executions) > 60 * 1e6   -- avg exec > 1 minute
 ORDER BY avg_elapsed_min DESC
 FETCH FIRST 20 ROWS ONLY;
+
+
+SELECT *
+FROM table(dbms_xplan.display_cursor(
+  'SQL_ID',
+  NULL,
+  'ALLSTATS LAST'
+));
+
+
+SELECT status, elapsed_time/1e6 elapsed_sec
+FROM v$sql_monitor
+WHERE sql_id = 'SQL_ID';
