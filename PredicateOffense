@@ -1,56 +1,45 @@
-WITH
-/* ============================================================
-   Unified attributes CTE (replaces PredicateOffences + Passports)
-   ============================================================ */
-ATTRIBUTES_AGG AS (
+WITH PredicateOffences AS (
     SELECT
-        work_item_id,
-
-        LISTAGG(
-            CASE WHEN attribute_type = 5119 THEN attribute_value END,
-            ','
-        ) WITHIN GROUP (ORDER BY attribute_value) AS predicate_offence,
-
-        LISTAGG(
-            CASE WHEN attribute_type = 5998 THEN attribute_value END,
-            ','
-        ) WITHIN GROUP (ORDER BY attribute_value) AS passport
-
-    FROM lc_scmt_work_item_multi_val_attributes
-    WHERE work_item_id = :case_id
-      AND attribute_type IN (5119, 5998)
-    GROUP BY work_item_id
+        LISTAGG(ATTRIB.ATTRIBUTE_VALUE, ',')
+            WITHIN GROUP (ORDER BY ATTRIB.ATTRIBUTE_TYPE) AS PredicateOffence
+    FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ATTRIB
+    WHERE ATTRIB.ATTRIBUTE_TYPE = 5119
+      AND ATTRIB.WORK_ITEM_ID = '@case_id@'
 ),
 
-/* =====================
-   Region CTE
-   ===================== */
+Passports AS (
+    SELECT
+        LISTAGG(ATTRIB.ATTRIBUTE_VALUE, ',')
+            WITHIN GROUP (ORDER BY ATTRIB.ATTRIBUTE_TYPE) AS Passport
+    FROM LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ATTRIB
+    WHERE ATTRIB.ATTRIBUTE_TYPE = 5998
+      AND ATTRIB.WORK_ITEM_ID = '@case_id@'
+),
+
 LREGION AS (
-    SELECT DISTINCT NVL(LR.MD_REL_LIST_ITEM_VALUE, '') AS REGION
+    SELECT DISTINCT
+        NVL(LR.MD_REL_LIST_ITEM_VALUE, '') AS Region
     FROM LC_RCM_INC.ALERTS A
-    JOIN LC_SCMT.MD_REL_LIST_ITEMS LI
-      ON LI.MD_REL_LIST_ITEM_VALUE = A.BUNIT_IDENTIFIER
-    JOIN LC_SCMT.BUSINESS_UNIT_DEPENDENCIES BU
-      ON LI.MD_REL_LIST_ITEM_ID = BU.BU_ID
-    JOIN LC_SCMT.MD_REL_LIST_ITEMS LR
-      ON LR.MD_REL_LIST_ITEM_ID = BU.INVEST_REGION_ID
-    WHERE A.ALERT_ID = :case_id
+    INNER JOIN LC_SCMT.MD_REL_LIST_ITEMS LI
+        ON LI.MD_REL_LIST_ITEM_VALUE = A.BUNIT_IDENTIFIER
+    INNER JOIN LC_SCMT.BUSINESS_UNIT_DEPENDENCIES BU
+        ON LI.MD_REL_LIST_ITEM_ID = BU.BU_ID
+    INNER JOIN LC_SCMT.MD_REL_LIST_ITEMS LR
+        ON LR.MD_REL_LIST_ITEM_ID = BU.INVEST_REGION_ID
+    WHERE A.ALERT_ID = '@case_id@'
 ),
 
-/* =====================
-   OWN_ENT CTE
-   ===================== */
 OWN_ENT AS (
     SELECT
         OE.ALERT_ID,
         '[' ||
         LISTAGG(
             NVL(OE.BUSINESS_DIV_CODE, '') || ',' ||
-            NVL(DB.BUSINESS_DIVISION, '') || ',' ||
+            NVL(BD.BUSINESS_DIVISION, '') || ',' ||
             NVL(OE.REGION_CODE, '') || ',' ||
             NVL(OE.COUNTRY_CODE, '') || ',' ||
             NVL(OE.UDS_ENTITY_CODE, '') || ',' ||
-            NVL(DMP.SHORT_ENTITY_NAME, OE.UDS_ENTITY_VAL) || ',' ||
+            NVL(SE.SHORT_ENTITY_NAME, OE.UDS_ENTITY_VAL) || ',' ||
             NVL(OE.LINE_OF_BUSINESS_CODE, '') || ',' ||
             NVL(OE.LINE_OF_BUSINESS_VAL, '') || ',' ||
             NVL(OE.IS_PRIMARY, '') || ',' ||
@@ -61,15 +50,24 @@ OWN_ENT AS (
         || ']' AS OWN_ENT
     FROM LC_SCMT.SCMT_OWNING_UDS_ENTITIES OE
     INNER JOIN (
-        SELECT 'Investment Bank' BUSINESS_DIVISION, 'IB' BUSINESS_DIV_CODE FROM DUAL UNION ALL
-        SELECT 'Wealth Management', 'WM' FROM DUAL UNION ALL
-        SELECT 'Wealth Management Americas', 'WMA' FROM DUAL UNION ALL
+        SELECT 'Investment Bank' AS BUSINESS_DIVISION, 'IB' AS BUSINESS_DIV_CODE FROM DUAL
+        UNION ALL
+        SELECT 'Wealth Management', 'WM' FROM DUAL
+        UNION ALL
+        SELECT 'Wealth Management Americas', 'WMA' FROM DUAL
+        UNION ALL
         SELECT 'Asset Management', 'AM' FROM DUAL
-    ) DB
-      ON OE.BUSINESS_DIV_CODE = DB.BUSINESS_DIV_CODE
-    LEFT JOIN LC_SCMT.SCMT_UDS_ENTITY DMP
-      ON OE.UDS_ENTITY_CODE = DMP.UDS_ENTITY_CODE
-    WHERE OE.ALERT_ID = :case_id
+        UNION ALL
+        SELECT 'Personal and Corporate', 'P&C' FROM DUAL
+        UNION ALL
+        SELECT 'Asset Management Joint Venture', 'WJV' FROM DUAL
+        UNION ALL
+        SELECT 'Corporate Branch', 'CB' FROM DUAL
+    ) BD
+        ON OE.BUSINESS_DIV_CODE = BD.BUSINESS_DIV_CODE
+    LEFT JOIN LC_SCMT.SCMT_SORT_ENTITIES SE
+        ON OE.UDS_ENTITY_CODE = SE.UDS_ENTITY_CODE
+    WHERE OE.ALERT_ID = '@case_id@'
     GROUP BY OE.ALERT_ID
 )
 
@@ -77,40 +75,46 @@ SELECT
     WIT.CASE_DESCRIPTION AS "Case Description",
 
     CASE
-        WHEN AAG.predicate_offence IS NULL THEN ''
-        ELSE '[' || AAG.predicate_offence || ']'
+        WHEN PR.PredicateOffence IS NULL THEN ''
+        ELSE '[' || PR.PredicateOffence || ']'
     END AS "PredicateOffences",
 
     CASE
-        WHEN AAG.passport IS NULL THEN ''
-        ELSE '[' || AAG.passport || ']'
+        WHEN P.Passport IS NULL THEN ''
+        ELSE '[' || P.Passport || ']'
     END AS "Passport",
 
     NVL(OE.OWN_ENT, '') AS OWN_ENT,
-    NVL(LR.REGION, '') AS "Logical Region",
+    NVL(LR.Region, '') AS "Logical Region",
+
     NVL(S.STATUS_NAME, '') AS "Case Step",
     NVL(USR.FULL_NAME, '') AS "Current Owner",
     TO_CHAR(A.CREATE_DATE, 'yyyy/mm/dd') AS "Case Opened Date",
+
     NVL(WIT.CASE_ANALYSIS, '') AS "CASE_ANALYSIS",
     NVL(WIT.CASE_CONCLUSION, '') AS "CASE_CONCLUSION"
 
 FROM LC_RCM_INC.ALERTS A
 LEFT JOIN LC_RCM_INC.ACM_ALERT_CUSTOM_ATTRIBUTES AC
-  ON A.ALERT_CUSTOM_ATTRIBUTES_ID = AC.ALERT_CUSTOM_ATTRIBUTES_ID
+    ON A.ALERT_CUSTOM_ATTRIBUTES_ID = AC.ALERT_CUSTOM_ATTRIBUTES_ID
 INNER JOIN LC_RCM_INC.ACM_MD_ALERT_STATUSES S
-  ON A.STATUS_INTERNAL_ID = S.STATUS_INTERNAL_ID
+    ON A.STATUS_INTERNAL_ID = S.STATUS_INTERNAL_ID
 INNER JOIN LC_RCM_INC.ACM_MD_ALERT_TYPES TC
-  ON A.ALERT_TYPE_INTERNAL_ID = TC.ALERT_TYPE_INTERNAL_ID
+    ON A.ALERT_TYPE_INTERNAL_ID = TC.ALERT_TYPE_INTERNAL_ID
 INNER JOIN LC_SCMT.WORK_ITEM_TYPES_CLASSES WTC
-  ON TC.WORK_ITEM_TYPE_ID = WTC.WORK_ITEM_TYPE_ID
+    ON TC.WORK_ITEM_TYPE_ID = WTC.WORK_ITEM_TYPE_ID
 LEFT JOIN LC_RCM_INC.ACM_USERS USR
-  ON A.OWNER_INTERNAL_ID = USR.USER_INTERNAL_ID
+    ON A.OWNER_INTERNAL_ID = USR.USER_INTERNAL_ID
 LEFT JOIN LC_SCMT.WORK_ITEM_ATTRIBUTES WIT
-  ON WIT.WORK_ITEM_ID = A.ALERT_ID
-LEFT JOIN ATTRIBUTES_AGG AAG
-  ON AAG.work_item_id = WIT.WORK_ITEM_ID
+    ON WIT.WORK_ITEM_ID = A.ALERT_ID
+
 LEFT JOIN LREGION LR
-  ON 1 = 1
+    ON 1 = 1
+LEFT JOIN PredicateOffences PR
+    ON 1 = 1
+LEFT JOIN Passports P
+    ON 1 = 1
 LEFT JOIN OWN_ENT OE
-  ON OE.ALERT_ID = A.ALERT_ID
-WHERE A.ALERT_ID = :case_id;
+    ON 1 = 1
+
+WHERE A.ALERT_ID = '@case_id@';
