@@ -1,0 +1,28 @@
+CREATE OR REPLACE VIEW V_ALERT_FILES AS
+SELECT
+    alert_id,
+
+    /* Latest file_date */
+    MAX(file_date) KEEP (DENSE_RANK FIRST ORDER BY file_date DESC) AS latest_file_date,
+
+    /* All previous file_dates concatenated */
+    LISTAGG(
+        CASE
+            WHEN rn > 1 THEN TO_CHAR(file_date, 'DD/MM/YYYY HH24:MI:SS')
+        END,
+        ' | '
+    ) WITHIN GROUP (ORDER BY file_date DESC) AS previous_file_dates
+
+FROM (
+    SELECT
+        A.ALERT_ID,
+        ATT.FILE_DATE,
+        ROW_NUMBER() OVER (PARTITION BY A.ALERT_ID ORDER BY ATT.FILE_DATE DESC) AS rn
+    FROM LC_RCM_INC.ALERTS A
+    JOIN LC_RCM_INC.ACM_ALERT_ATTACHMENTS ALT_ATT
+        ON A.ALERT_INTERNAL_ID = ALT_ATT.ALERT_INTERNAL_ID
+    JOIN LC_RCM_INC.ACM_ATTACHMENTS ATT
+        ON ALT_ATT.ATTACHMENT_INTERNAL_ID = ATT.ATTACHMENT_INTERNAL_ID
+    WHERE ATT.FILE_NAME LIKE 'mros%'
+)
+GROUP BY alert_id;
