@@ -1,0 +1,47 @@
+SELECT
+    v.caseid,
+    v.brid,
+    v.brdecision,
+    CASE
+        /* If this row is NOT No SAR Filed, keep its real value */
+        WHEN v.casesarfiled IS NOT NULL
+         AND v.casesarfiled <> 'No SAR Filed'
+        THEN v.casesarfiled
+
+        /* This row is No SAR Filed → check if another real value exists in the case */
+        WHEN MAX(
+                 CASE
+                     WHEN v.casesarfiled = 'SAR Filing' THEN 3
+                     WHEN v.casesarfiled = 'STR Filing' THEN 2
+                     WHEN v.casesarfiled IS NOT NULL
+                      AND v.casesarfiled <> 'No SAR Filed' THEN 1
+                     ELSE 0
+                 END
+             ) OVER (PARTITION BY v.caseid) = 3
+        THEN 'SAR Filing'
+
+        WHEN MAX(
+                 CASE
+                     WHEN v.casesarfiled = 'SAR Filing' THEN 3
+                     WHEN v.casesarfiled = 'STR Filing' THEN 2
+                     WHEN v.casesarfiled IS NOT NULL
+                      AND v.casesarfiled <> 'No SAR Filed' THEN 1
+                     ELSE 0
+                 END
+             ) OVER (PARTITION BY v.caseid) = 2
+        THEN 'STR Filing'
+
+        WHEN MAX(
+                 CASE
+                     WHEN v.casesarfiled IS NOT NULL
+                      AND v.casesarfiled <> 'No SAR Filed' THEN 1
+                     ELSE 0
+                 END
+             ) OVER (PARTITION BY v.caseid) = 1
+        THEN MAX(v.casesarfiled)
+             OVER (PARTITION BY v.caseid)
+
+        /* Else: all are No SAR Filed or NULL */
+        ELSE 'No SAR Filed'
+    END AS casesarfiled
+FROM LC_SCMT.VW_FCSMT_CH_MASTER_DART_PBICR_PLUS v;
