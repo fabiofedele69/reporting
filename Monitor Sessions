@@ -1,0 +1,201 @@
+Total TEMP Size
+
+SELECT 
+    tablespace_name,
+    SUM(bytes)/1024/1024 AS total_mb
+FROM dba_temp_files
+GROUP BY tablespace_name;
+
+Current TEMP Used (Overall)
+
+SELECT
+    tablespace_name,
+    SUM(blocks) * 8 / 1024 AS used_mb
+FROM v$tempseg_usage
+GROUP BY tablespace_name;
+
+(Assumes 8KB block size — adjust if different)
+
+More accurate (block size aware):
+
+SELECT
+    u.tablespace,
+    SUM(u.blocks * t.block_size)/1024/1024 AS used_mb
+FROM v$tempseg_usage u
+JOIN dba_tablespaces t 
+  ON u.tablespace = t.tablespace_name
+GROUP BY u.tablespace;
+
+
+Free vs Used TEMP
+
+SELECT
+    tablespace_name,
+    SUM(bytes_used)/1024/1024 AS used_mb,
+    SUM(bytes_free)/1024/1024 AS free_mb
+FROM v$temp_space_header
+GROUP BY tablespace_name;
+
+
+TEMP Usage Per Session (During Query Execution)
+
+SELECT
+    s.sid,
+    s.serial#,
+    s.username,
+    s.sql_id,
+    u.blocks * t.block_size / 1024 / 1024 AS temp_mb
+FROM v$session s
+JOIN v$tempseg_usage u 
+  ON s.saddr = u.session_addr
+JOIN dba_tablespaces t
+  ON u.tablespace = t.tablespace_name
+ORDER BY temp_mb DESC;
+
+
+Total UNDO Tablespace Size
+
+SELECT 
+    tablespace_name,
+    SUM(bytes)/1024/1024 AS total_mb
+FROM dba_data_files
+WHERE tablespace_name = (
+    SELECT value FROM v$parameter WHERE name='undo_tablespace'
+)
+GROUP BY tablespace_name;
+
+
+Active UNDO Currently Used
+
+SELECT
+    tablespace_name,
+    SUM(bytes)/1024/1024 AS active_undo_mb
+FROM dba_undo_extents
+WHERE status = 'ACTIVE'
+GROUP BY tablespace_name;
+
+
+UNDO Usage Per Running Session
+
+SELECT
+    s.sid,
+    s.serial#,
+    s.username,
+    s.sql_id,
+    t.used_ublk * 8 / 1024 AS undo_mb
+FROM v$transaction t
+JOIN v$session s 
+  ON t.ses_addr = s.saddr
+ORDER BY undo_mb DESC;
+
+
+CPU Used by Active Sessions
+
+SELECT
+    s.sid,
+    s.serial#,
+    s.username,
+    s.sql_id,
+    ss.value AS cpu_centisecs
+FROM v$session s
+JOIN v$sesstat ss 
+  ON s.sid = ss.sid
+JOIN v$statname sn 
+  ON ss.statistic# = sn.statistic#
+WHERE sn.name = 'CPU used by this session'
+ORDER BY cpu_centisecs DESC;
+
+
+CPU Used by Specific SQL_ID
+
+SELECT
+    sql_id,
+    cpu_time/1000000 AS cpu_seconds,
+    elapsed_time/1000000 AS elapsed_seconds,
+    executions
+FROM v$sql
+WHERE sql_id = '&SQL_ID';
+
+
+Logical & Physical Reads Per Session I/O
+
+SELECT
+    s.sid,
+    s.serial#,
+    s.sql_id,
+    SUM(CASE WHEN sn.name = 'physical reads' THEN ss.value END) AS phys_reads,
+    SUM(CASE WHEN sn.name = 'session logical reads' THEN ss.value END) AS logical_reads
+FROM v$session s
+JOIN v$sesstat ss ON s.sid = ss.sid
+JOIN v$statname sn ON ss.statistic# = sn.statistic#
+WHERE sn.name IN ('physical reads','session logical reads')
+GROUP BY s.sid, s.serial#, s.sql_id
+ORDER BY phys_reads DESC;
+
+
+I/O Per SQL
+
+SELECT
+    sql_id,
+    disk_reads,
+    buffer_gets
+FROM v$sql
+WHERE sql_id = '&SQL_ID';
+
+
+PGA Used Per Session
+
+SELECT
+    s.sid,
+    s.serial#,
+    s.username,
+    p.pga_used_mem/1024/1024 AS pga_used_mb,
+    p.pga_alloc_mem/1024/1024 AS pga_alloc_mb
+FROM v$session s
+JOIN v$process p
+  ON s.paddr = p.addr
+ORDER BY pga_used_mb DESC;
+
+
+Workarea Memory (Sort/Hash)
+
+SELECT
+    sid,
+    operation_type,
+    actual_mem_used/1024/1024 AS mem_used_mb,
+    tempseg_size/1024/1024 AS temp_used_mb
+FROM v$sql_workarea_active;
+
+
+Real-Time Monitoring of a Specific Query
+
+SELECT sid, serial#, sql_id
+FROM v$session
+WHERE status = 'ACTIVE'
+AND username IS NOT NULL;
+
+
+Step 2 — Monitor everything for that SID:
+
+-- TEMP
+SELECT * FROM v$tempseg_usage WHERE session_addr =
+(SELECT saddr FROM v$session WHERE sid=&SID);
+
+-- UNDO
+SELECT used_ublk FROM v$transaction WHERE ses_addr =
+(SELECT saddr FROM v$session WHERE sid=&SID);
+
+-- CPU
+SELECT value FROM v$sesstat ss
+JOIN v$statname sn ON ss.statistic#=sn.statistic#
+WHERE sn.name='CPU used by this session'
+AND sid=&SID;
+
+If You Want Enterprise-Level Monitoring
+
+SELECT * 
+FROM table(DBMS_XPLAN.DISPLAY_CURSOR('&SQL_ID', NULL, 'ALLSTATS LAST'));
+
+SELECT * FROM v$active_session_history
+WHERE sql_id='&SQL_ID';
+
