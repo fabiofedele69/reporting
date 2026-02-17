@@ -36,3 +36,18 @@ WHERE grantee='PUBLIC'
 AND table_name='DBMS_LOB';
 
 
+-- compiled dependencies
+SELECT 'DEPENDENCY' src, name, type
+FROM dba_dependencies
+WHERE owner='LC_SCMT'
+AND referenced_name='DBMS_LOB'
+
+UNION ALL
+
+-- text references
+SELECT 'SOURCE' src, name, type
+FROM dba_source
+WHERE owner='LC_SCMT'
+AND UPPER(text) LIKE '%DBMS_LOB%';
+
+
