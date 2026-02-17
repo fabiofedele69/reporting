@@ -21,3 +21,18 @@ FROM dba_tab_privs
 WHERE owner='SYS'
 AND table_name='DBMS_LOB'
 ORDER BY grantee;
+
+
+extra checks
+
+SELECT owner, object_name, object_type
+FROM dba_objects
+WHERE object_name = 'YOUR_OBJECT_NAME';
+
+
+SELECT *
+FROM dba_tab_privs
+WHERE grantee='PUBLIC'
+AND table_name='DBMS_LOB';
+
+
