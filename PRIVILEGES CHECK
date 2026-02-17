@@ -1,0 +1,15 @@
+SELECT 'DIRECT' source, grantee, privilege, grantable
+FROM dba_tab_privs
+WHERE grantee = 'LC_SCMT'
+  AND owner = 'SYS'
+  AND table_name = 'DBMS_LOB'
+
+UNION ALL
+
+SELECT 'ROLE' source, p.grantee, p.privilege, p.grantable
+FROM dba_tab_privs p
+JOIN dba_role_privs r
+  ON p.grantee = r.granted_role
+WHERE r.grantee = 'LC_SCMT'
+  AND p.owner = 'SYS'
+  AND p.table_name = 'DBMS_LOB';
