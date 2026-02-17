@@ -13,3 +13,11 @@ JOIN dba_role_privs r
 WHERE r.grantee = 'LC_SCMT'
   AND p.owner = 'SYS'
   AND p.table_name = 'DBMS_LOB';
+
+
+
+SELECT grantee, privilege, grantable
+FROM dba_tab_privs
+WHERE owner='SYS'
+AND table_name='DBMS_LOB'
+ORDER BY grantee;
