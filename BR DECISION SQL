@@ -62,11 +62,11 @@ FROM
 
     FROM
         LC_RCM_INC.ALERTS A,
-        LC_RCM_INC.ALERT_CUSTOM_ATTRIBUTES ACA,
+        LC_RCM_INC.ACM_ALERT_CUSTOM_ATTRIBUTES ACA,
         LC_RCM_INC.ACM_MD_ALERT_TYPES AT,
         LC_SCMT.CASE_ELEMENTS CE,
-        LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ao,
-        LC_RCM_INC.alerts ma
+        LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES MA,
+        LC_RCM_INC.alerts AO
 
     WHERE A.ALERT_CUSTOM_ATTRIBUTES_ID =
           ACA.ALERT_CUSTOM_ATTRIBUTES_ID
@@ -76,8 +76,8 @@ FROM
       AND A.ALERT_TYPE_ID = 1016
       AND CE.CASE_ID = 'cpx_20260227_00001'
       AND A.DELETED = 0
-      AND ma.attribute_value(+) = a.alert_id
-      AND ma.work_item_id = ao.alert_id(+)
-      AND ao.ALERT_TYPE_ID(+) = 1007
-      AND ao.DELETED(+) = 0
+      AND MA.attribute_value(+) = A.alert_id
+      AND attribute_type(+) = 7076
+      AND AO.ALERT_TYPE_ID(+) = 1007
+      AND AO.DELETED(+) = 0
 );
