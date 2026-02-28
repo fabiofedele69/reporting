@@ -1,0 +1,107 @@
+SELECT
+    case_id,
+    alert_id,
+    clientadvisor,
+
+    MAX(CASE
+            WHEN RN_BR = 1
+            THEN BR_DECISION
+        END) AS BR_DECISION,
+
+    MAX(CASE
+            WHEN RN_SAR = 1
+            THEN SAR_DECISION
+        END) AS SAR_DECISION
+
+FROM
+(
+    SELECT
+        case_id,
+        alert_id,
+        clientadvisor,
+        BR_Decision,
+        SAR_Decision,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY alert_id
+            ORDER BY BR_Decision_rank DESC
+        ) RN_BR,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY alert_id
+            ORDER BY SAR_Decision_rank DESC
+        ) RN_SAR
+
+    FROM
+    (
+        SELECT
+            CE.CASE_ID,
+            A.ALERT_ID,
+            ACA.CSM14 AS clientadvisor,
+
+            /* -------- BR -------- */
+            CASE
+                WHEN AO.P32 <> 'Report to Authorities'
+                 AND AO.P32 <> 'No SAR Filed'
+                THEN AO.P32
+                ELSE 'N/A'
+            END BR_Decision,
+
+            CASE
+                WHEN AO.P32 <> 'Report to Authorities'
+                 AND AO.P32 <> 'No SAR Filed'
+                THEN 1 ELSE 0
+            END BR_Decision_rank,
+
+            /* -------- SAR -------- */
+            CASE
+                WHEN AO.P32 = 'Report to Authorities'
+                THEN AO.P31
+                WHEN AO.P32 = 'No SAR Filed'
+                THEN AO.P32
+                ELSE 'N/A'
+            END SAR_Decision,
+
+            CASE
+                WHEN AO.P32 IN
+                     ('Report to Authorities','No SAR Filed')
+                THEN 1 ELSE 0
+            END SAR_Decision_rank,
+
+            CASE
+                WHEN AO.P32 IN
+                     ('Report to Authorities','No SAR Filed')
+                THEN AO.CREATE_DATE
+            END SAR_CREATE_DATE
+
+        FROM
+            LC_RCM_INC.ALERTS A,
+            LC_RCM_INC.ACM_ALERT_CUSTOM_ATTRIBUTES ACA,
+            LC_RCM_INC.ACM_MD_ALERT_TYPES AT,
+            LC_SCMT.CASE_ELEMENTS CE,
+            LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES MA,
+            LC_RCM_INC.ALERTS AO
+
+        WHERE 
+            A.ALERT_CUSTOM_ATTRIBUTES_ID =
+                ACA.ALERT_CUSTOM_ATTRIBUTES_ID
+        AND A.ALERT_TYPE_INTERNAL_ID =
+                AT.ALERT_TYPE_INTERNAL_ID
+        AND A.ALERT_ID = CE.WORK_ITEM_ID
+        AND A.ALERT_TYPE_ID = 1016
+        AND CE.CASE_ID = 'cpx_20260227_00001'
+        AND A.DELETED = 0
+        AND MA.attribute_value(+) = A.alert_id
+        AND attribute_type(+) = 7076
+        AND MA.WORK_ITEM_ID = AO.ALERT_ID(+)
+        AND AO.ALERT_TYPE_ID(+) = 1007
+        AND AO.DELETED(+) = 0
+    )
+)
+GROUP BY
+    case_id,
+    alert_id,
+    clientadvisor
+ORDER BY
+    case_id,
+    alert_id;
