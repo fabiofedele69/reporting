@@ -1,56 +1,83 @@
-select alert_id,
-       BR_Decision_rank,
-       BR_Decision,
-       ROW_NUMBER() OVER (PARTITION BY alert_id ORDER BY BR_Decision_rank DESC) AS RN_BR,
-       SAR_Decision_rank,
-       SAR_Decision,
-       ROW_NUMBER() OVER (PARTITION BY alert_id ORDER BY SAR_Decision_rank DESC) AS RN_SAR,
-       SAR_CREATE_DATE
-       from 
-       (
-       select a.alert_id,
-       CASE 
-         WHEN ao.p32 <> 'Report to Authorities' AND ao.p32 <> 'No SAR Filed' THEN ao.p32
-         ELSE 'N/A'
-       END as BR_Decision,
-       CASE 
-         WHEN ao.p32 <> 'Report to Authorities' AND ao.p32 <> 'No SAR Filed' THEN 1
-         ELSE 0
-       END as BR_Decision_rank,
-       CASE
-         WHEN ao.p32 = 'Report to Authorities' THEN ao.p31
-         WHEN ao.p32 = 'No SAR Filed' THEN ao.p32
-         ELSE 'N/A'
-       END as SAR_Decision,
-       CASE 
-          WHEN ao.p32 = 'Report to Authorities' OR ao.p32 = 'No SAR Filed' THEN 1
-          ELSE 0
-       END as SAR_Decision_rank,
-      CASE
-          WHEN ao.p32 = 'Report to Authorities' OR ao.p32 = 'No SAR Filed' THEN ao.create_date
-          ELSE null
-       END as SAR_CREATE_DATE      
-       FROM LC_RCM_INC.ALERTS A,
-            LC_RCM_INC.ACM_ALERT_CUSTOM_ATTRIBUTES ACA,
-            LC_RCM_INC.ACM_MD_ALERT_TYPES AT,
-            LC_SCMT.CASE_ELEMENTS CE,
-            LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES MA,
-            LC_RCM_INC.ALERTS AO
-            WHERE
-            A.ALERT_CUSTOM_ATTRIBUTES_ID = ACA.ALERT_CUSTOM_ATTRIBUTES_ID
-            AND
-            A.ALERT_TYPE_INTERNAL_ID = AT.ALERT_TYPE_INTERNAL_ID
-            AND
-            A.ALERT_ID = CE.WORK_ITEM_ID
-            AND
-            A.ALERT_TYPE_ID = 1016
-            AND
-            CE.CASE_ID = ''
-            AND 
-            A.DELETED = 0
-            AND
-            MA.ATTRIBUTE_VALUE(+) = AO.ALERT_ID(+)
-            AND
-            AO.ALERT_TYPE_ID(+) = 1007
-            AND
-            AO.DELETED(+) = 0 );
+SELECT
+    alert_id,
+    BR_Decision_rank,
+    BR_Decision,
+
+    ROW_NUMBER() OVER (
+        PARTITION BY alert_id
+        ORDER BY BR_Decision_rank DESC
+    ) AS RN_BR,
+
+    SAR_Decision_rank,
+    SAR_Decision,
+
+    ROW_NUMBER() OVER (
+        PARTITION BY alert_id
+        ORDER BY SAR_Decision_rank DESC
+    ) AS RN_SAR,
+
+    SAR_CREATE_DATE
+FROM
+(
+    SELECT
+        a.alert_id,
+
+        /* -------- BR Decision -------- */
+        CASE
+            WHEN ao.p32 <> 'Report to Authorities'
+             AND ao.p32 <> 'No SAR Filed'
+            THEN ao.p32
+            ELSE 'N/A'
+        END AS BR_Decision,
+
+        CASE
+            WHEN ao.p32 <> 'Report to Authorities'
+             AND ao.p32 <> 'No SAR Filed'
+            THEN 1
+            ELSE 0
+        END AS BR_Decision_rank,
+
+        /* -------- SAR Decision -------- */
+        CASE
+            WHEN ao.p32 = 'Report to Authorities'
+            THEN ao.p31
+            WHEN ao.p32 = 'No SAR Filed'
+            THEN ao.p32
+            ELSE 'N/A'
+        END AS SAR_Decision,
+
+        CASE
+            WHEN ao.p32 = 'Report to Authorities'
+              OR ao.p32 = 'No SAR Filed'
+            THEN 1
+            ELSE 0
+        END AS SAR_Decision_rank,
+
+        CASE
+            WHEN ao.p32 = 'Report to Authorities'
+              OR ao.p32 = 'No SAR Filed'
+            THEN ao.create_date
+            ELSE NULL
+        END AS SAR_CREATE_DATE
+
+    FROM
+        LC_RCM_INC.ALERTS A,
+        LC_RCM_INC.ALERT_CUSTOM_ATTRIBUTES ACA,
+        LC_RCM_INC.ACM_MD_ALERT_TYPES AT,
+        LC_SCMT.CASE_ELEMENTS CE,
+        LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ao,
+        LC_RCM_INC.alerts ma
+
+    WHERE A.ALERT_CUSTOM_ATTRIBUTES_ID =
+          ACA.ALERT_CUSTOM_ATTRIBUTES_ID
+      AND A.ALERT_TYPE_INTERNAL_ID =
+          AT.ALERT_TYPE_INTERNAL_ID
+      AND A.ALERT_ID = CE.WORK_ITEM_ID
+      AND A.ALERT_TYPE_ID = 1016
+      AND CE.CASE_ID = 'cpx_20260227_00001'
+      AND A.DELETED = 0
+      AND ma.attribute_value(+) = a.alert_id
+      AND ma.work_item_id = ao.alert_id(+)
+      AND ao.ALERT_TYPE_ID(+) = 1007
+      AND ao.DELETED(+) = 0
+);
