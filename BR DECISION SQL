@@ -1,40 +1,25 @@
 SELECT
     alert_id,
 
-    MAX(CASE
-            WHEN RN_BR = 1
-            THEN BR_DECISION
-        END) AS BR_DECISION,
-
-    MAX(CASE
-            WHEN RN_SAR = 1
-            THEN SAR_DECISION
-        END) AS SAR_DECISION,
-
-    MAX(CASE
-            WHEN RN_SAR = 1
-            THEN SAR_CREATE_DATE
-        END) AS SAR_CREATE_DATE
+    MAX(CASE WHEN RN_BR = 1 THEN BR_DECISION END) AS BR_DECISION,
+    MAX(CASE WHEN RN_SAR = 1 THEN SAR_DECISION END) AS SAR_DECISION,
+    MAX(CASE WHEN RN_SAR = 1 THEN SAR_CREATE_DATE END) AS SAR_CREATE_DATE
 
 FROM
 (
     SELECT
         alert_id,
-        BR_Decision_rank,
         BR_Decision,
-
         ROW_NUMBER() OVER (
             PARTITION BY alert_id
             ORDER BY BR_Decision_rank DESC
-        ) AS RN_BR,
+        ) RN_BR,
 
-        SAR_Decision_rank,
         SAR_Decision,
-
         ROW_NUMBER() OVER (
             PARTITION BY alert_id
             ORDER BY SAR_Decision_rank DESC
-        ) AS RN_SAR,
+        ) RN_SAR,
 
         SAR_CREATE_DATE
     FROM
@@ -42,40 +27,38 @@ FROM
         SELECT
             a.alert_id,
 
-            /* -------- BR Decision -------- */
             CASE
-                WHEN ao.p32 <> 'Report to Authorities'
-                 AND ao.p32 <> 'No SAR Filed'
+                WHEN ao.p32 NOT IN
+                     ('Report to Authorities','No SAR Filed')
                 THEN ao.p32
                 ELSE 'N/A'
-            END AS BR_Decision,
+            END BR_Decision,
 
             CASE
-                WHEN ao.p32 <> 'Report to Authorities'
-                 AND ao.p32 <> 'No SAR Filed'
-                THEN 1
-                ELSE 0
-            END AS BR_Decision_rank,
+                WHEN ao.p32 NOT IN
+                     ('Report to Authorities','No SAR Filed')
+                THEN 1 ELSE 0
+            END BR_Decision_rank,
 
-            /* -------- SAR Decision -------- */
             CASE
                 WHEN ao.p32 = 'Report to Authorities'
                 THEN ao.p31
                 WHEN ao.p32 = 'No SAR Filed'
                 THEN ao.p32
                 ELSE 'N/A'
-            END AS SAR_Decision,
+            END SAR_Decision,
 
             CASE
-                WHEN ao.p32 IN ('Report to Authorities','No SAR Filed')
-                THEN 1
-                ELSE 0
-            END AS SAR_Decision_rank,
+                WHEN ao.p32 IN
+                     ('Report to Authorities','No SAR Filed')
+                THEN 1 ELSE 0
+            END SAR_Decision_rank,
 
             CASE
-                WHEN ao.p32 IN ('Report to Authorities','No SAR Filed')
+                WHEN ao.p32 IN
+                     ('Report to Authorities','No SAR Filed')
                 THEN ao.create_date
-            END AS SAR_CREATE_DATE
+            END SAR_CREATE_DATE
 
         FROM LC_RCM_INC.ALERTS A,
              LC_RCM_INC.ALERT_CUSTOM_ATTRIBUTES ACA,
@@ -84,15 +67,16 @@ FROM
              LC_RCM_INC.alerts ma,
              LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES ao
 
-        WHERE A.ALERT_CUSTOM_ATTRIBUTES_ID = ACA.ALERT_CUSTOM_ATTRIBUTES_ID
-        AND A.ALERT_TYPE_INTERNAL_ID = AT.ALERT_TYPE_INTERNAL_ID
+        WHERE A.ALERT_CUSTOM_ATTRIBUTES_ID =
+              ACA.ALERT_CUSTOM_ATTRIBUTES_ID
+        AND A.ALERT_TYPE_INTERNAL_ID =
+              AT.ALERT_TYPE_INTERNAL_ID
         AND A.ALERT_ID = CE.WORK_ITEM_ID
         AND A.ALERT_TYPE_ID = 1016
         AND A.DELETED = 0
         AND ma.attribute_value(+) = a.alert_id
         AND ma.work_item_id = ao.alert_id(+)
         AND ao.ALERT_TYPE_ID(+) = 1007
-        AND ao.DELETED(+) = 0
     )
 )
 GROUP BY alert_id;
