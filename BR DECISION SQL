@@ -68,16 +68,26 @@ FROM
         LC_SCMT.WORK_ITEM_MULTI_VAL_ATTRIBUTES MA,
         LC_RCM_INC.alerts AO
 
-    WHERE A.ALERT_CUSTOM_ATTRIBUTES_ID =
-          ACA.ALERT_CUSTOM_ATTRIBUTES_ID
-      AND A.ALERT_TYPE_INTERNAL_ID =
-          AT.ALERT_TYPE_INTERNAL_ID
-      AND A.ALERT_ID = CE.WORK_ITEM_ID
-      AND A.ALERT_TYPE_ID = 1016
-      AND CE.CASE_ID = 'cpx_20260227_00001'
-      AND A.DELETED = 0
-      AND MA.attribute_value(+) = A.alert_id
-      AND attribute_type(+) = 7076
-      AND AO.ALERT_TYPE_ID(+) = 1007
-      AND AO.DELETED(+) = 0
+    WHERE 
+        A.ALERT_CUSTOM_ATTRIBUTES_ID = ACA.ALERT_CUSTOM_ATTRIBUTES_ID
+      AND 
+        A.ALERT_TYPE_INTERNAL_ID = AT.ALERT_TYPE_INTERNAL_ID
+      AND 
+        A.ALERT_ID = CE.WORK_ITEM_ID
+      AND 
+        A.ALERT_TYPE_ID = 1016
+      AND 
+        CE.CASE_ID = 'cpx_20260227_00001'
+      AND 
+        A.DELETED = 0
+      AND 
+        MA.attribute_value(+) = A.alert_id
+      AND 
+        attribute_type(+) = 7076
+      AND 
+        MA.WORK_ITEM_ID = AO.ALERT_ID(+)
+      AND
+        AO.ALERT_TYPE_ID(+) = 1007
+      AND 
+        AO.DELETED(+) = 0
 );
