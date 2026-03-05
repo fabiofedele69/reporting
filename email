@@ -1,0 +1,24 @@
+Dear Laura,
+
+Thank you for the positive feedback you shared earlier on Teams regarding the GFIU report delivered today.
+
+As agreed during our conversation, I am reporting below the list of fields in the report for which a restriction has been applied due to the maximum limit of a Microsoft Excel cell (32,767 characters).
+
+In practice, this limitation is automatically applied by Excel, which does not allow storing more than 32,767 characters in a single cell. As a result, the current algorithm used to load and transform the content of these specific fields will only process the first 32,767 characters. Any additional content beyond this limit will be truncated.
+
+Therefore, it should not be expected that a Summary Analysis containing very large amounts of text (for example, hundreds of thousands or millions of characters) can be fully stored within a single Excel cell.
+
+From a business perspective, if for a specific field (for example *Summary Analysis*) it is important to highlight a short summary or key information that better describes or ranks the analysis, I would recommend placing this note at the beginning of the text.
+This ensures that the most relevant information will always be included and will not be truncated by the Excel limitation.
+
+The affected fields are:
+
+* SUMMARY_TRIGGER
+* SUMMARY_ANALYSIS
+* SUMMARY_CONCLUSION
+* CASE_DESCRIPTION
+
+Please let me know if you need any further clarification.
+
+Thanks and regards,
+Fabio
