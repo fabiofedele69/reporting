@@ -1,0 +1,47 @@
+SELECT
+    'SELECT ''' || table_name || ''' AS table_name, ''' || column_name || ''' AS column_name, COUNT(*) cnt ' ||
+    'FROM LC_RCM_INC.' || table_name ||
+    ' WHERE UPPER(' || column_name || ') LIKE ''%<ALL>%'' ' ||
+    '    OR UPPER(' || column_name || ') LIKE ''%ACTION%'' ' ||
+    'HAVING COUNT(*) > 0;'
+AS sql_to_run
+FROM all_tab_columns
+WHERE owner = 'LC_RCM_INC'
+  AND data_type IN ('VARCHAR2', 'CHAR', 'NVARCHAR2', 'NCHAR')
+ORDER BY table_name, column_id;
+
+SELECT
+    'SELECT ''' || table_name || ''' AS table_name, ''' || column_name || ''' AS column_name, COUNT(*) cnt ' ||
+    'FROM LC_RCM_INC.' || table_name ||
+    ' WHERE UPPER(' || column_name || ') LIKE ''%<ALL>%'' ' ||
+    '    OR UPPER(' || column_name || ') LIKE ''%ACTION%'' ' ||
+    'HAVING COUNT(*) > 0;'
+FROM all_tab_columns
+WHERE owner = 'LC_RCM_INC'
+  AND data_type IN ('VARCHAR2', 'CHAR')
+  AND (
+        table_name LIKE '%ROLE%'
+     OR table_name LIKE '%ACTION%'
+     OR table_name LIKE '%PRIV%'
+     OR table_name LIKE '%ENTIT%'
+     OR table_name LIKE '%DS%'
+     OR table_name LIKE '%MODULE%'
+  );
+
+-- example for CH_MASTER
+SELECT
+    'SELECT ''' || table_name || ''' t, ''' || column_name || ''' c, COUNT(*) cnt FROM LC_RCM_INC.' || table_name ||
+    ' WHERE UPPER(' || column_name || ') LIKE ''%CH_MASTER%'' HAVING COUNT(*) > 0;'
+FROM all_tab_columns
+WHERE owner = 'LC_RCM_INC'
+  AND data_type LIKE '%CHAR%';
+
+SELECT table_name, column_name
+FROM all_tab_columns
+WHERE owner = 'LC_RCM_INC'
+AND (
+    column_name LIKE '%ALL%'
+ OR column_name LIKE '%FLAG%'
+ OR column_name LIKE '%FULL%'
+);
+
