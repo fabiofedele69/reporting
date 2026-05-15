@@ -1,42 +1,39 @@
-Hi all,
+Hi Mayur,
 
-We are currently investigating a permission behavior observed in the UAT Power BI workspace.
+I am investigating the behavior of semantic model permissions in the UAT Power BI workspace.
 
-Context:
+Current situation:
 
-* In DEV environment, the “Manage permissions” option is available on semantic models, allowing Build permissions to be assigned to users.
-* In UAT environment, the same option is not available/visible, even though workspace roles have already been assigned.
+* In DEV environment, the “Manage permissions” option is available on semantic models and allows Build permissions to be assigned to users.
+* In UAT environment, the same option is currently not visible/available on the semantic models, even though I published the reports and semantic models myself and we both have workspace roles assigned through the BBS/MIM process.
 
-Current observations:
+Since you originally requested/provisioned the workspace, I would like to validate whether there is any ownership or governance difference attached to the original requester of the workspace.
 
-* Workspace access is managed through BBS requests and corresponding MIM groups.
-* Workspace roles (Admin, Member, Contributor, Viewer) appear to be centrally governed through enterprise access management.
-* In UAT, semantic models and reports were published directly by me, but the “Manage permissions” option is still unavailable.
+Could you please perform the following test?
 
-Hypothesis:
-This may indicate that the UAT environment is governed by additional Power BI/Fabric restrictions preventing manual semantic model permission management, potentially requiring all access to be controlled exclusively through MIM groups and BBS processes.
+Test:
 
-Next validation step:
-We will test whether another workspace admin/user can create and publish a report in the same UAT workspace and verify whether the “Manage permissions” option becomes available for that user.
+1. Create a very small test report (.pbix)
+2. Publish it into the same UAT workspace
+3. Open the corresponding semantic model in Power BI Service
+4. Verify whether the “Manage permissions” option is available for you
 
-Possible outcomes:
+Expected outcomes:
 
-1. If another user can manage permissions:
+* If you can see/manage permissions:
+  this may indicate that the original workspace requester has additional ownership/governance privileges.
 
-   * there may be an additional hidden entitlement, ownership privilege, or governance role attached to the original workspace requester.
+* If you also cannot see “Manage permissions”:
+  then the issue is likely related to UAT governance restrictions or tenant-level Power BI/Fabric policies rather than user-specific permissions.
 
-2. If another user also cannot manage permissions:
+In case the test fails as well, we may need to:
 
-   * the limitation is likely environment/workspace governance related rather than user specific.
+* involve the Power BI/Fabric admin team
+* verify tenant/workspace governance settings
+* confirm whether Build permissions are intentionally managed only through BBS/MIM groups in UAT
+* evaluate whether App-based permission inheritance should be used instead of manual semantic model sharing
 
-Potential resolution paths:
+Please let me know the outcome once you have tested it.
 
-* Verify tenant/workspace governance settings with the Power BI/Fabric administration team
-* Confirm whether semantic model sharing and Build permissions are intentionally restricted in UAT
-* Evaluate whether Build access must instead be granted through MIM groups/BBS requests
-* Verify whether App-based permission inheritance should be used instead of manual semantic model sharing
-
-We will continue the investigation and share the outcome of the additional validation test.
-
-Best regards,
+Thanks,
 Fabio
