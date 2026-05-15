@@ -35,5 +35,10 @@ In case the test fails as well, we may need to:
 
 Please let me know the outcome once you have tested it.
 
+
+
+P.S. Since the UAT workspace was originally provisioned through the pipeline/request process initiated on your side, I am also wondering whether the workspace provisioning flow may assign additional ownership or governance metadata to the original requester, potentially impacting semantic model permission management behavior.
+
+
 Thanks,
 Fabio
