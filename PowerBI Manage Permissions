@@ -1,0 +1,42 @@
+Hi all,
+
+We are currently investigating a permission behavior observed in the UAT Power BI workspace.
+
+Context:
+
+* In DEV environment, the “Manage permissions” option is available on semantic models, allowing Build permissions to be assigned to users.
+* In UAT environment, the same option is not available/visible, even though workspace roles have already been assigned.
+
+Current observations:
+
+* Workspace access is managed through BBS requests and corresponding MIM groups.
+* Workspace roles (Admin, Member, Contributor, Viewer) appear to be centrally governed through enterprise access management.
+* In UAT, semantic models and reports were published directly by me, but the “Manage permissions” option is still unavailable.
+
+Hypothesis:
+This may indicate that the UAT environment is governed by additional Power BI/Fabric restrictions preventing manual semantic model permission management, potentially requiring all access to be controlled exclusively through MIM groups and BBS processes.
+
+Next validation step:
+We will test whether another workspace admin/user can create and publish a report in the same UAT workspace and verify whether the “Manage permissions” option becomes available for that user.
+
+Possible outcomes:
+
+1. If another user can manage permissions:
+
+   * there may be an additional hidden entitlement, ownership privilege, or governance role attached to the original workspace requester.
+
+2. If another user also cannot manage permissions:
+
+   * the limitation is likely environment/workspace governance related rather than user specific.
+
+Potential resolution paths:
+
+* Verify tenant/workspace governance settings with the Power BI/Fabric administration team
+* Confirm whether semantic model sharing and Build permissions are intentionally restricted in UAT
+* Evaluate whether Build access must instead be granted through MIM groups/BBS requests
+* Verify whether App-based permission inheritance should be used instead of manual semantic model sharing
+
+We will continue the investigation and share the outcome of the additional validation test.
+
+Best regards,
+Fabio
