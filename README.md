@@ -14,17 +14,17 @@ This repository contains the capstone proposal notebook and supporting datasets 
 
 The objective of the project is to investigate how Machine Learning can support Anti-Money Laundering (AML) investigations through:
 
-1. **False Positive Reduction**
+### 1. False Positive Reduction
 
-   * Anomaly Detection using Isolation Forest
-   * Identification of unusual AML cases
-   * Investigation prioritization
+* Anomaly Detection using Isolation Forest
+* Identification of unusual AML cases
+* Investigation prioritization
 
-2. **SAR Filing Prediction**
+### 2. SAR Filing Prediction
 
-   * Logistic Regression
-   * Gradient Boosting
-   * Risk-based prioritization of AML cases
+* Logistic Regression
+* Gradient Boosting
+* Risk-based prioritization of AML cases
 
 ---
 
@@ -40,7 +40,7 @@ Model:
 
 ### Research Question 2
 
-Can supervised learning predict whether an investigated AML case is likely to result in a Suspicious Activity Report (SAR) filing?
+Can supervised learning predict whether an investigated case is likely to result in a Suspicious Activity Report (SAR) filing?
 
 Models:
 
@@ -54,26 +54,19 @@ Models:
 ```text
 .
 ├── README.md
-├── requirements.txt
 ├── c5_project-proposal-Fabio-Fedele-reviewed.ipynb
 │
 └── data/
     ├── single_tables/
-    │   ├── alerts.csv
-    │   ├── approvals.csv
-    │   ├── case_events.csv
-    │   ├── case_narratives.csv
-    │   ├── cases.csv
-    │   ├── clients.csv
-    │   ├── evidence.csv
-    │   ├── investigators.csv
-    │   ├── reviewers.csv
-    │   └── transactions.csv
-    │
     └── final_datasets/
-        ├── full_dataset.csv
-        └── model_dataset.csv
 ```
+
+The repository contains:
+
+* The capstone proposal notebook
+* The source AML tables used to construct the consolidated datasets
+* The Full Dataset used for exploratory analysis and interpretation
+* The Modeling Dataset used for machine learning
 
 ---
 
@@ -99,24 +92,30 @@ Governance Review
 Final Outcome
 ```
 
-Two consolidated datasets are provided:
+Two consolidated datasets are provided.
+
+---
 
 ### Full Dataset
 
-Contains:
+The Full Dataset represents a consolidated case-level analytical view.
+
+It contains:
 
 * Alert information
-* Case characteristics
-* Investigator attributes
+* Scenario information
+* Case complexity indicators
+* Investigator characteristics
 * Governance information
 * Final outcomes
 
-Used for:
+It is primarily used for:
 
 * Exploratory Data Analysis (EDA)
 * Feature inventory and interpretation
 * Data lineage analysis
-* Case-level walkthrough
+* Case-level walkthroughs
+* Business understanding of the AML process
 
 Current size:
 
@@ -129,9 +128,9 @@ Current size:
 
 ### Modeling Dataset
 
-Machine learning-ready dataset derived from the Full Dataset.
+The Modeling Dataset is derived from the Full Dataset through a structured preparation process that removes identifiers and leakage variables while retaining observable information suitable for machine learning.
 
-Used for:
+It is used for:
 
 * Isolation Forest
 * Logistic Regression
@@ -160,42 +159,6 @@ This distribution reflects a realistic AML environment characterized by class im
 
 ---
 
-## Running the Notebook
-
-### Prerequisites
-
-Python 3.10+ recommended.
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-or
-
-```bash
-pip install pandas numpy matplotlib seaborn scikit-learn jupyter
-```
-
----
-
-### Launch Jupyter Notebook
-
-```bash
-jupyter notebook
-```
-
-Open:
-
-```text
-c5_project-proposal-Fabio-Fedele-reviewed.ipynb
-```
-
-and execute the notebook from top to bottom.
-
----
-
 ## Notebook Contents
 
 The notebook contains:
@@ -203,7 +166,7 @@ The notebook contains:
 1. Problem definition and research questions
 2. Dataset overview
 3. Dataset documentation
-4. Full Dataset vs Modeling Dataset comparison
+4. Full Dataset and Modeling Dataset comparison
 5. Feature inventory and dataset composition
 6. Preliminary exploratory data analysis (EDA)
 7. Data lineage analysis
@@ -214,9 +177,19 @@ The notebook contains:
 
 ## Notes
 
-The synthetic AML data generation framework itself is not part of the capstone proposal submission.
+The AML data generation framework itself is not part of the capstone proposal submission.
 
 This repository focuses on the generated datasets and their analysis in support of the proposed machine learning tasks.
+
+The purpose of the notebook is to document:
+
+* Dataset origin
+* Dataset structure
+* Feature inventory
+* Data lineage
+* Case-level construction
+* Preliminary exploratory analysis
+* Machine learning feasibility
 
 ---
 
