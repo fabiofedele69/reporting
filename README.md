@@ -59,7 +59,7 @@ The second task compares an interpretable linear model (Logistic Regression) wit
 ├── Dataset Origin and Preparation.ipynb
 ├── Isolation Forest.ipynb
 ├── Logistic Regression.ipynb
-├── Random Forest.ipynb
+├── Random Forest.md
 │
 └── data/
     ├── single_tables/
