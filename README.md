@@ -54,12 +54,12 @@ The second task compares an interpretable linear model (Logistic Regression) wit
 
 ```text
 .
-├── README.ipynb
+├── README.md
 ├── c5_project-proposal-Fabio-Fedele.ipynb
 ├── Dataset Origin and Preparation.ipynb
 ├── Isolation Forest.ipynb
 ├── Logistic Regression.ipynb
-├── Random Forest.md
+├── Random Forest.ipynb
 │
 └── data/
     ├── single_tables/
