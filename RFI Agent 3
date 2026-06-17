@@ -1,0 +1,186 @@
+# RFI Agent Capabilities – Architecture Analysis
+
+The "RFI Agent Capabilities" diagram represents the logical architecture of the proposed RFI Agent rather than a simple list of features. Each row defines a specific capability of the agent together with:
+
+- the business responsibility,
+- the AI reasoning required,
+- the deterministic inputs,
+- the guardrails,
+- and the expected business outcome.
+
+The architecture clearly follows an **Agentic AI** approach where the agent is responsible for orchestrating the entire RFI lifecycle while remaining under human supervision.
+
+---
+
+## 1. Initiation & Thread Intelligence
+
+This capability is responsible for creating and maintaining the **RFI Thread**, which appears to be the central business object of the solution.
+
+The agent must decide whether:
+
+- to create a new RFI Thread,
+- continue an existing one,
+- or associate the interaction with an existing investigation.
+
+Unlike traditional email-based workflows, the thread becomes the persistent container for:
+
+- messages,
+- evidence,
+- meetings,
+- clarifications,
+- lifecycle status,
+- audit history,
+- conversation memory.
+
+This demonstrates that the system is workflow-centric rather than communication-centric.
+
+---
+
+## 2. Participant & Ownership Reasoning
+
+The agent identifies the correct Control Owner (KPCi Owner) using authoritative organizational data.
+
+Its responsibilities include:
+
+- ownership discovery,
+- ownership changes,
+- delegation,
+- escalation,
+- redirection.
+
+Instead of searching manually, the agent reasons over enterprise organizational data while preserving a single auditable RFI Thread.
+
+---
+
+## 3. Message Composition & Context Control
+
+The LLM is used primarily for structured communication rather than autonomous decision making.
+
+An important architectural constraint is explicitly stated:
+
+> **The agent does not invent new requests.**
+
+Instead, it composes messages using deterministic business inputs such as:
+
+- Test Case
+- Control
+- Existing templates
+- Testing objectives
+- Known execution gaps
+
+This significantly reduces hallucination risk and improves explainability.
+
+---
+
+## 4. Response Interpretation & Evidence Reasoning
+
+This capability is where AI provides the greatest business value.
+
+The agent evaluates incoming evidence by determining:
+
+- whether the response is complete,
+- whether requested evidence has been provided,
+- what information is still missing,
+- whether clarification is required.
+
+Rather than checking document presence only, the agent performs semantic reasoning over the response.
+
+---
+
+## 5. Lifecycle Management & Escalation
+
+The final capability manages the operational workflow.
+
+Responsibilities include:
+
+- SLA monitoring,
+- reminder generation,
+- escalation,
+- lifecycle transitions,
+- closure decisions.
+
+The agent therefore behaves as an intelligent workflow coordinator rather than a conversational chatbot.
+
+---
+
+# Architectural Observations
+
+Several important architectural principles emerge from the diagram.
+
+## RFI Thread as the Core Entity
+
+The documentation consistently refers to the **RFI Thread** rather than individual emails or chat messages.
+
+This suggests that every interaction—including communications, evidence, meetings, approvals and audit history—belongs to a single persistent business object.
+
+---
+
+## AI + Deterministic Inputs
+
+The architecture intentionally separates:
+
+- deterministic business information
+- AI reasoning
+
+Deterministic systems provide facts such as:
+
+- Test Case
+- Control ID
+- Owner
+- SLA
+- Templates
+
+The AI contributes:
+
+- reasoning,
+- summarization,
+- validation,
+- prioritization,
+- communication,
+- workflow decisions.
+
+This separation is particularly appropriate for regulated banking environments because it minimizes hallucinations while maintaining explainability.
+
+---
+
+## Human-in-the-Loop
+
+Throughout the architecture the human remains responsible for final decisions.
+
+The agent:
+
+- recommends,
+- drafts,
+- validates,
+- monitors,
+- escalates,
+
+while the investigator retains approval authority where required.
+
+---
+
+## Proposed Logical Architecture
+
+The diagram naturally suggests a modular multi-component architecture.
+
+```
+                    RFI Orchestrator
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+ Thread Intelligence   Ownership Reasoning   Message Composition
+        │                  │                  │
+        └──────────────────┼──────────────────┘
+                           │
+              Response & Evidence Reasoning
+                           │
+                 Lifecycle & Escalation
+                           │
+                  Human Approval Layer
+                           │
+                  Audit & Observability
+```
+
+Instead of implementing one large monolithic agent, the solution can be viewed as a coordinated set of specialized capabilities managed by an orchestration layer.
+
+This modular architecture aligns well with the Hackathon objectives of **reusability**, **governance**, **explainability**, and **enterprise readiness**.
