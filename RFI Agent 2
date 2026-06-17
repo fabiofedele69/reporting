@@ -1,0 +1,155 @@
+# Questions for the Hackathon Team & Organizers
+
+Based on the analysis of the RFI Agent Hackathon documentation, the following questions should be discussed within the team and, where appropriate, clarified with the organizers.
+
+---
+
+## 1. MAVRIC Framework
+
+### Architecture
+- Does MAVRIC already provide built-in support for:
+  - Stateful memory?
+  - Multi-agent orchestration?
+  - Tool calling?
+  - Workflow management?
+  - Human approval workflows?
+
+### Development
+- Are there recommended architectural patterns ("Golden Paths") for implementing an RFI Agent?
+- Is there a reference implementation or sample project available?
+
+---
+
+## 2. PRISM (Enterprise AI Suite)
+
+### Available Services
+- Which Prism capabilities are available during the Hackathon?
+- Can the prototype access:
+  - AI-as-a-Service?
+  - Enterprise APIs?
+  - Authentication services?
+  - Logging and monitoring services?
+
+### LLM Integration
+- Is the RFI Agent expected to consume LLMs exclusively through Prism?
+- Which language models are available?
+- Can different models be used for different agent capabilities?
+
+---
+
+## 3. AI MART
+
+### Deployment
+- Is AI MART expected to be demonstrated during the Hackathon or only considered as the target deployment platform?
+
+### Evaluation
+- Does AI MART automatically collect:
+  - Quality metrics?
+  - Prompt evaluation?
+  - Model performance?
+  - Agent execution traces?
+
+---
+
+## 4. Guardrails
+
+### Human-in-the-Loop
+- Which actions require mandatory human approval?
+- Is sending an RFI expected to require user confirmation?
+
+### AI Boundaries
+- Are there mandatory guardrails that every agent must implement?
+- Should the agent always explain the reasoning behind its recommendations?
+
+---
+
+## 5. Enterprise Integration
+
+### Existing Systems
+Which enterprise systems are available for integration?
+
+Examples:
+- Compliance Workbench
+- Organizational Directory
+- Control Repository
+- Email
+- Microsoft Teams
+- API Gateway
+
+### Mocking
+- Which integrations may be mocked during the Hackathon?
+
+---
+
+## 6. RFI Thread
+
+Since the documentation repeatedly refers to an **RFI Thread**, it would be useful to clarify:
+
+- What constitutes an RFI Thread?
+- Does it already exist as a business object?
+- Should every interaction (messages, meetings, evidence, escalations) belong to the same thread?
+- Is there an existing API for managing RFI Threads?
+
+---
+
+## 7. Evidence Validation
+
+How sophisticated should evidence validation be?
+
+Examples:
+- Metadata validation only?
+- Semantic comparison between requested and received evidence?
+- LLM-based completeness assessment?
+- Confidence scoring?
+
+---
+
+## 8. Agent Architecture
+
+Would the judges prefer:
+
+- A single intelligent agent
+- Multiple specialized agents coordinated by an orchestrator
+- A workflow engine with AI capabilities
+
+---
+
+## 9. Demonstration
+
+What level of implementation is expected?
+
+- Fully functional workflow?
+- Mock enterprise integrations?
+- Simulated emails?
+- Simulated document uploads?
+- Live interaction with the agent?
+
+---
+
+# Internal Team Discussion
+
+Before implementation, our team should agree on the following design decisions:
+
+- What is the central business object of the solution?
+  - We propose that the **RFI Thread** becomes the core entity.
+
+- Which responsibilities belong to the AI?
+- Which responsibilities remain under human control?
+- How should stateful memory be implemented?
+- How should auditability and explainability be demonstrated?
+- How can the architecture remain reusable across different Compliance domains?
+
+---
+
+# Success Criteria
+
+A successful solution should demonstrate:
+
+- End-to-end RFI lifecycle management
+- Stateful conversation and workflow memory
+- Human-in-the-loop decision making
+- Explainable AI recommendations
+- Complete audit trail
+- Modular and reusable architecture
+- Alignment with the UBS AI ecosystem (MAVRIC, Prism, AI MART)
+- Production-oriented design rather than a standalone chatbot
