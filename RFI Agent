@@ -1,0 +1,38 @@
+                 Investigator
+
+                       │
+
+               RFI Web Interface
+
+                       │
+
+          MAVRIC Agent Framework
+      (workflow + orchestration + memory)
+
+                       │
+
+         ┌─────────────┼─────────────┐
+         │             │             │
+ Ownership Agent  Evidence Agent  Lifecycle Agent
+         │             │             │
+         └─────────────┼─────────────┘
+
+                       │
+
+         Prism Enterprise AI Platform
+
+                       │
+
+         AI as a Service / LLM Endpoint
+
+                       │
+
+      Enterprise Systems & Business APIs
+
+                       │
+
+   AI MART (deployment, monitoring, governance)
+
+                       │
+
+ Security • Audit • Guardrails • Observability
