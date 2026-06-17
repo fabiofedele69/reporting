@@ -1,1 +1,23 @@
-
+Control Testing
+        │
+        ▼
+Missing Information Detected
+        │
+        ▼
+RFI Orchestrator
+        │
+        ├── Thread Intelligence
+        ├── Ownership Reasoning
+        ├── Message Composition
+        ├── Human Approval
+        ├── Send RFI
+        ├── Receive Response
+        ├── Evidence Reasoning
+        ├── Completeness Check
+        ├── Clarification / Follow-up
+        ├── SLA Monitoring
+        ├── Escalation
+        └── Close Thread
+        │
+        ▼
+Audit Trail + AI MART + Observability
